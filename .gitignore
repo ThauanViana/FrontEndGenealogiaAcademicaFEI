@@ -1,0 +1,25 @@
+# dependencies
+/node_modules
+/src//.pnp
+/src/.pnp.js
+/src//coverage
+/src//.next/
+/src//out/
+/src//build
+.DS_Store
+/src/.DS_Store
+/src/*.pem
+/src/npm-debug.log*
+/src/yarn-debug.log*
+/src/yarn-error.log*
+/src/.env*.local
+/src/.env
+/src/.vercel
+/src/*.tsbuildinfo
+/src/next-env.d.ts
+/src/.idea
+/src/.vscode
+/src/*.swp
+/src/*.swo
+/src/Thumbs.db
+/src/node_modules
