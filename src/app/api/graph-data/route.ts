@@ -2,9 +2,9 @@ import { NextResponse } from "next/server"
 import neo4j from "neo4j-driver"
 
 export async function GET() {
-  const uri = process.env.NEO4J_URI || "bolt://137.184.143.5:7687"
-  const user = process.env.NEO4J_USER || "neo4j"
-  const password = process.env.NEO4J_PASSWORD || "fei123"
+  const uri = process.env.NEO4J_URI
+  const user = process.env.NEO4J_USER
+  const password = process.env.NEO4J_PASSWORD
 
   const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
   const session = driver.session()
@@ -67,4 +67,3 @@ RETURN {
     return NextResponse.json({ error: "Failed to fetch graph data" }, { status: 500 })
   }
 }
-
