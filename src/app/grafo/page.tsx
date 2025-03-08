@@ -77,7 +77,7 @@ export default function Grafo() {
 
   const layout = {
     name: "cose",
-    animate: true,
+    animate: false,
     nodeDimensionsIncludeLabels: true,
     padding: 50,
     componentSpacing: 100,
