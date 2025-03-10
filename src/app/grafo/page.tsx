@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import CytoscapeComponent from "react-cytoscapejs"
 import { Input } from "@/components/ui/input"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
-import { Loader2 } from "lucide-react"
+import { Loader2, Maximize, Minimize } from "lucide-react" // Use 'Maximize' e 'Minimize' como ícones alternativos
 
 export default function Grafo() {
   const [elements, setElements] = useState<{ group: string; data: any }[]>([])
@@ -15,6 +15,8 @@ export default function Grafo() {
   const [error, setError] = useState<string | null>(null)
   const [institutions, setInstitutions] = useState<string[]>([])
   const [areas, setAreas] = useState<string[]>([])
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [filteredElements, setFilteredElements] = useState<{ group: string; data: any }[]>([])
 
   const fetchGraphData = useCallback(async () => {
     try {
@@ -63,17 +65,46 @@ export default function Grafo() {
       return nameMatch && institutionMatch && fieldMatch
     })
 
+    console.log("Filtered Nodes:", filteredNodes)
+
     // Cria um Set com os IDs dos nós filtrados
     const filteredNodeIds = new Set(filteredNodes.map((node) => node.data.id))
 
-    // Filtra as arestas que conectam os nós filtrados
-    const filteredEdges = elements.filter((el) => {
-      if (!el.data || !el.data.source) return false // Não é uma aresta
-      return filteredNodeIds.has(el.data.source) && filteredNodeIds.has(el.data.target)
-    })
+    // Função recursiva para adicionar nós e arestas conectados
+    const addConnectedElements = (nodeId) => {
+      elements.forEach((el) => {
+        if (el.data && el.data.source && el.data.target) {
+          if (el.data.source === nodeId || el.data.target === nodeId) {
+            if (!filteredNodeIds.has(el.data.source)) {
+              filteredNodeIds.add(el.data.source)
+              addConnectedElements(el.data.source)
+            }
+            if (!filteredNodeIds.has(el.data.target)) {
+              filteredNodeIds.add(el.data.target)
+              addConnectedElements(el.data.target)
+            }
+          }
+        }
+      })
+    }
 
-    return [...filteredNodes, ...filteredEdges]
+    // Adiciona todos os nós e arestas conectados aos nós filtrados
+    filteredNodes.forEach((node) => addConnectedElements(node.data.id))
+
+    // Filtra novamente os nós e arestas com base no conjunto de IDs atualizado
+    const finalFilteredNodes = elements.filter((el) => el.data && filteredNodeIds.has(el.data.id))
+    const finalFilteredEdges = elements.filter((el) => el.data && el.data.source && filteredNodeIds.has(el.data.source) && filteredNodeIds.has(el.data.target))
+
+    console.log("Final Filtered Nodes:", finalFilteredNodes)
+    console.log("Final Filtered Edges:", finalFilteredEdges)
+
+    return [...finalFilteredNodes, ...finalFilteredEdges]
   }, [elements, nameFilter, institutionFilter, fieldFilter])
+
+  useEffect(() => {
+    const filtered = applyFilters()
+    setFilteredElements(filtered)
+  }, [applyFilters])
 
   const layout = {
     name: "cose",
@@ -149,7 +180,9 @@ export default function Grafo() {
     )
   }
 
-  const filteredElements = applyFilters()
+  const toggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen)
+  }
 
   return (
     <div className="space-y-6">
@@ -190,8 +223,15 @@ export default function Grafo() {
         </Select>
       </div>
 
-      <div className="border border-gray-300 rounded-lg" style={{ height: "600px" }}>
+      <div className="border border-gray-300 rounded-lg relative" style={{ height: "600px" }}>
+        <button
+          onClick={toggleFullscreen}
+          className="absolute top-2 right-2 bg-white p-2 rounded-full shadow-md z-10"
+        >
+          {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
+        </button>
         <CytoscapeComponent
+          key={JSON.stringify(filteredElements)}
           elements={filteredElements}
           layout={layout}
           stylesheet={stylesheet}
@@ -201,7 +241,29 @@ export default function Grafo() {
           wheelSensitivity={0.2}
         />
       </div>
+
+      {isFullscreen && (
+        <div className="fixed inset-0 z-50 bg-white">
+          <div className="border border-gray-300 rounded-lg relative" style={{ height: "100%" }}>
+            <button
+              onClick={toggleFullscreen}
+              className="absolute top-2 right-2 bg-white p-2 rounded-full shadow-md z-10"
+            >
+              <Minimize size={16} />
+            </button>
+            <CytoscapeComponent
+              key={JSON.stringify(filteredElements)}
+              elements={filteredElements}
+              layout={layout}
+              stylesheet={stylesheet}
+              style={{ width: "100%", height: "100%" }}
+              minZoom={0.5}
+              maxZoom={2}
+              wheelSensitivity={0.2}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
-
