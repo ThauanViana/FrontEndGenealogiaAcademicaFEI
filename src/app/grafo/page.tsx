@@ -59,7 +59,7 @@ export default function Grafo() {
       if (!el.data || !el.data.label) return false // Não é um nó
 
       const nameMatch = nameFilter === "" || el.data.label.toLowerCase().includes(nameFilter.toLowerCase())
-      const institutionMatch = institutionFilter === "Todas" || el.data.instituicaoDoutorado === institutionFilter
+      const institutionMatch = institutionFilter === "Todas" || el.data.instituicaoCorrespondente === institutionFilter
       const fieldMatch = fieldFilter === "Todas" || el.data.areaDoutorado === fieldFilter
 
       return nameMatch && institutionMatch && fieldMatch
@@ -144,7 +144,7 @@ export default function Grafo() {
       },
     },
     {
-      selector: "node[instituicaoDoutorado = 'FEI'], node[instituicaoDoutorado = 'FUNDAÇÃO EDUCACIONAL INACIANA']",
+      selector: "node[instituicaoCorrespondente = 'Centro Universitario Fundacao Educacional Inaciana Pe Saboia Medeiros']",
       style: {
         "background-color": "#FF6347",
       },

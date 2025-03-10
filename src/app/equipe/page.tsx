@@ -20,7 +20,7 @@ export default function Equipe() {
       papel: "Orientador",
       descricao:
         "Professor orientador do projeto, fornecendo direcionamento e experiência na análise de genealogia acadêmica. Possui mestrado e doutorado em Ciência da Computação pela Universidade Federal do ABC, ambos com ênfase em caracterização e métodos computacionais baseados em genealogia acadêmica.",
-      foto: "/luciano.png?height=100&width=100",
+      foto: "/luciano.png",
     },
   ]
 

@@ -23,6 +23,11 @@ export default function Header() {
                 </Link>
               </li>
               <li>
+                <Link href="/metagrafo" className="hover:underline">
+                  Metagrafo
+                </Link>
+              </li>
+              <li>
                 <Link href="/sobre" className="hover:underline">
                   Sobre
                 </Link>

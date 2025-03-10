@@ -14,12 +14,12 @@ export async function GET() {
     const result = await session.run(`
 MATCH (n:Pesquisador)
 OPTIONAL MATCH (n)-[r:ORIENTOU]->(m:Pesquisador)
-WITH COLLECT(DISTINCT n.instituicaoDoutorado) as instituicaoDoutorado,
+WITH COLLECT(DISTINCT n.instituicaoCorrespondente) as instituicaoCorrespondente,
      COLLECT(DISTINCT n.areaDoutorado) as areas,
      COLLECT(DISTINCT {
        id: n.idLattes,
        label: n.nome,
-       instituicaoDoutorado: n.instituicaoDoutorado,
+       instituicaoCorrespondente: n.instituicaoCorrespondente,
        areaDoutorado: n.areaDoutorado
      }) as nodes,
      COLLECT(DISTINCT {
@@ -27,7 +27,7 @@ WITH COLLECT(DISTINCT n.instituicaoDoutorado) as instituicaoDoutorado,
        target: m.idLattes
      }) as relationships
 RETURN {
-  instituicaoDoutorado: instituicaoDoutorado,
+  instituicaoCorrespondente: instituicaoCorrespondente,
   areas: areas,
   nodes: nodes,
   edges: [rel IN relationships WHERE rel.source IS NOT NULL AND rel.target IS NOT NULL]
@@ -58,12 +58,12 @@ RETURN {
       nodes,
       edges,
       metadata: {
-        institutions: data.instituicaoDoutorado.filter(Boolean).sort(),
+        institutions: data.instituicaoCorrespondente.filter(Boolean).sort(),
         areas: data.areas.filter(Boolean).sort(),
       },
     })
   } catch (error) {
     console.error("Error fetching graph data:", error)
-    return NextResponse.json({ error: "Failed to fetch graph data" }, { status: 500 })
+    return NextResponse.json({ error: "Falha ao consultar dados do grafo." }, { status: 500 })
   }
 }
