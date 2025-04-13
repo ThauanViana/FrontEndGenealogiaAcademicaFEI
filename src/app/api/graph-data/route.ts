@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   const session = driver.session()
 
   try {
-    // Verifica o parâmetro de consulta
+    
     const { searchParams } = new URL(request.url)
     const isInitialLoad = searchParams.get("initial") === "true"
 

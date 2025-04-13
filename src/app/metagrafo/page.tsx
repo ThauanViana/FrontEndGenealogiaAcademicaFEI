@@ -23,6 +23,17 @@ export default function MetaGrafo() {
   const cyRef = useRef<Core | null>(null)
   const [layoutExecuted, setLayoutExecuted] = useState(false)
 
+
+  const layout = useMemo(() => ({
+    name: "fcose",
+    quality: "default",
+    nodeSeparation: 3000, 
+    idealEdgeLength: 200, 
+    nodeRepulsion: 100000, 
+    gravity: 0.1, 
+    animate: false,
+    fit: true,
+  }), [])
   const fetchGraphData = useCallback(async () => {
     try {
       setLoading(true)
@@ -69,57 +80,61 @@ export default function MetaGrafo() {
   }, [])
 
   const applyFilters = useCallback(() => {
-    if (elements.length === 0) return
-
+    if (elements.length === 0) return;
+  
     if (institutionFilter === "Todas") {
-      setFilteredElements(elements)
-      return
+      setFilteredElements(elements);
+      if (cyRef.current) {
+        cyRef.current.elements().remove(); 
+        cyRef.current.add(elements); 
+        const layoutInstance = cyRef.current.layout(layout);
+        layoutInstance.run(); 
+        cyRef.current.resize();
+        cyRef.current.fit();
+      }
+      return;
     }
-
-    const nodes = elements.filter((el) => !el.data.source && !el.data.target)
-    const edges = elements.filter((el) => el.data.source && el.data.target)
-
+  
+    const nodes = elements.filter((el) => !el.data.source && !el.data.target);
+    const edges = elements.filter((el) => el.data.source && el.data.target);
+  
     const filteredEdges = edges.filter(
-      (edge) => edge.data.source === institutionFilter || edge.data.target === institutionFilter,
-    )
-
-    const nodeIdsToKeep = new Set()
-    nodeIdsToKeep.add(institutionFilter)
-
+      (edge) => edge.data.source === institutionFilter || edge.data.target === institutionFilter
+    );
+  
+    const nodeIdsToKeep = new Set();
+    nodeIdsToKeep.add(institutionFilter);
+  
     filteredEdges.forEach((edge) => {
-      nodeIdsToKeep.add(edge.data.source)
-      nodeIdsToKeep.add(edge.data.target)
-    })
-
-    const filteredNodes = nodes.filter((node) => nodeIdsToKeep.has(node.data.id))
-
-    setFilteredElements([...filteredNodes, ...filteredEdges])
-  }, [elements, institutionFilter])
-
+      nodeIdsToKeep.add(edge.data.source);
+      nodeIdsToKeep.add(edge.data.target);
+    });
+  
+    const filteredNodes = nodes.filter((node) => nodeIdsToKeep.has(node.data.id));
+  
+    const newFilteredElements = [...filteredNodes, ...filteredEdges];
+    setFilteredElements(newFilteredElements);
+  
+    
+    if (cyRef.current) {
+      cyRef.current.elements().remove(); 
+      cyRef.current.add(newFilteredElements); 
+      const layoutInstance = cyRef.current.layout(layout);
+      layoutInstance.run(); 
+      cyRef.current.resize();
+      cyRef.current.fit();
+    }
+  }, [elements, institutionFilter, layout]);
   useEffect(() => {
     fetchGraphData()
   }, [fetchGraphData])
 
 
   cytoscape.use(fcose)
-  const layout = useMemo(() => ({
-    name: "fcose",
-    quality: "default",
-    nodeSeparation: 3000, 
-    idealEdgeLength: 200, 
-    nodeRepulsion: 100000, 
-    gravity: 0.1, 
-    animate: false,
-    fit: true,
-  }), [])
+
   useEffect(() => {
-    applyFilters()
-  
-    if (cyRef.current) {
-      const layoutInstance = cyRef.current.layout(layout)
-      layoutInstance.run() 
-    }
-  }, [applyFilters])
+    applyFilters();
+  }, [applyFilters]);
   const stylesheet = [
     {
       selector: "node",
@@ -377,19 +392,28 @@ export default function MetaGrafo() {
         <Minimize size={16} />
       </button>
       <CytoscapeComponent
-        elements={filteredElements} // Reutiliza os mesmos elementos
-        stylesheet={stylesheet} // Reutiliza o mesmo estilo
+        elements={filteredElements} 
+        stylesheet={stylesheet} 
         style={{ width: "100%", height: "100%" }}
         minZoom={0.5}
         maxZoom={2}
         wheelSensitivity={0.2}
         cy={(cy) => {
-          initializeCytoscape(cy)
+          if (!cy) return; 
+          cyRef.current = cy; 
+
           setTimeout(() => {
-            const layoutInstance = cy.layout(layout)
-            layoutInstance.run()
-            cy.resize()
-          }, 0)
+            if (cyRef.current) {
+              cyRef.current.batch(() => {
+                cyRef.current.elements().remove(); 
+                cyRef.current.add(filteredElements); 
+                const layoutInstance = cyRef.current.layout(layout); 
+                layoutInstance.run();
+                cyRef.current.resize(); 
+                cyRef.current.fit(); 
+              });
+            }
+          }, 0);
         }}
         userZoomingEnabled={true}
         userPanningEnabled={true}

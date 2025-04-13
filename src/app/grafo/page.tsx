@@ -5,6 +5,7 @@ import CytoscapeComponent from "react-cytoscapejs"
 import { Input } from "@/components/ui/input"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { Loader2, Maximize, Minimize } from "lucide-react" // Use 'Maximize' e 'Minimize' como ícones alternativos
+import { useMemo } from "react"
 
 export default function Grafo() {
   const [elements, setElements] = useState<{ group: string; data: any }[]>([])
@@ -42,7 +43,7 @@ export default function Grafo() {
       setAreas(data.metadata.areas)
   
       if (isInitialLoad) {
-        setIsInitialLoad(false) // Define que a inicialização foi concluída
+        setIsInitialLoad(false) 
       }
   
       setLoading(false)
@@ -52,6 +53,10 @@ export default function Grafo() {
       setLoading(false)
     }
   }, [isInitialLoad])
+  const uniqueSortedNames = useMemo(() => {
+    return [...new Set(elements.filter((el) => el.data?.label).map((el) => el.data.label))]
+      .sort((a, b) => a.localeCompare(b));
+  }, [elements]);
 
   useEffect(() => {
     if (isInitialLoad) {
@@ -59,17 +64,18 @@ export default function Grafo() {
     }
   }, [isInitialLoad, fetchGraphData])
 
+  
   const applyFilters = useCallback(() => {
     if (elements.length === 0) return []
 
-    // Se todos os filtros estiverem vazios, retorna todos os elementos
+    
     if (nameFilter === "" && institutionFilter === "Todas" && fieldFilter === "Todas") {
       return elements
     }
 
-    // Filtra os nós
+   
     const filteredNodes = elements.filter((el) => {
-      if (!el.data || !el.data.label) return false // Não é um nó
+      if (!el.data || !el.data.label) return false
 
       const nameMatch = nameFilter === "" || el.data.label.toLowerCase().includes(nameFilter.toLowerCase())
       const institutionMatch = institutionFilter === "Todas" || el.data.instituicaoCorrespondente === institutionFilter
@@ -80,10 +86,10 @@ export default function Grafo() {
 
     console.log("Filtered Nodes:", filteredNodes)
 
-    // Cria um Set com os IDs dos nós filtrados
+   
     const filteredNodeIds = new Set(filteredNodes.map((node) => node.data.id))
 
-    // Função recursiva para adicionar nós e arestas conectados
+    
     const addConnectedElements = (nodeId) => {
       elements.forEach((el) => {
         if (el.data && el.data.source && el.data.target) {
@@ -101,10 +107,10 @@ export default function Grafo() {
       })
     }
 
-    // Adiciona todos os nós e arestas conectados aos nós filtrados
+    
     filteredNodes.forEach((node) => addConnectedElements(node.data.id))
 
-    // Filtra novamente os nós e arestas com base no conjunto de IDs atualizado
+    
     const finalFilteredNodes = elements.filter((el) => el.data && filteredNodeIds.has(el.data.id))
     const finalFilteredEdges = elements.filter((el) => el.data && el.data.source && filteredNodeIds.has(el.data.source) && filteredNodeIds.has(el.data.target))
 
@@ -203,31 +209,34 @@ export default function Grafo() {
     setIsFullscreen(!isFullscreen)
   }
 
+ 
+  
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Grafo de Genealogia Acadêmica</h1>
 
       <div className="flex flex-wrap gap-4">
-  <Select value={nameFilter} onValueChange={setNameFilter}>
-    <SelectTrigger className="w-[280px]">
-      <SelectValue placeholder="Luciano Rossi" />
-    </SelectTrigger>
-    <SelectContent>
-      <SelectItem value="Luciano Rossi">Luciano Rossi</SelectItem>
-      {[...new Set(elements.filter((el) => el.data?.label).map((el) => el.data.label))].map((name) => (
-        <SelectItem key={name} value={name}>
-          {name}
-        </SelectItem>
-      ))}
-    </SelectContent>
-  </Select>
+      <Select value={nameFilter} onValueChange={setNameFilter}>
+  <SelectTrigger className="w-[280px]">
+    <SelectValue placeholder="Todos" />
+  </SelectTrigger>
+  <SelectContent>
+    {uniqueSortedNames.map((name) => (
+      <SelectItem key={name} value={name}>
+        {name}
+      </SelectItem>
+    ))}
+  </SelectContent>
+</Select>
   <Select value={institutionFilter} onValueChange={setInstitutionFilter}>
     <SelectTrigger className="w-[280px]">
       <SelectValue placeholder="Instituição" />
     </SelectTrigger>
     <SelectContent>
       <SelectItem value="Todas">Todas as Instituições</SelectItem>
-      {institutions.map((inst) => (
+      {institutions.slice() 
+      .sort((a, b) => a.localeCompare(b)) 
+      .map((inst)=> (
         <SelectItem key={inst} value={inst}>
           {inst}
         </SelectItem>
@@ -240,20 +249,23 @@ export default function Grafo() {
     </SelectTrigger>
     <SelectContent>
       <SelectItem value="Todas">Todas as Áreas</SelectItem>
-      {areas.map((area) => (
+      {areas.slice() 
+      .sort((a, b) => a.localeCompare(b)) 
+      .map((area) => (
         <SelectItem key={area} value={area}>
           {area}
         </SelectItem>
       ))}
     </SelectContent>
   </Select>
-</div>
-<button
+  <button
     onClick={fetchGraphData}
-    className="bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600"
+    className="bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600 ml-auto"
   >
     Grafo com todos pesquisadores
   </button>
+</div>
+
       <div className="border border-gray-300 rounded-lg relative" style={{ height: "600px" }}>
         <button
           onClick={toggleFullscreen}
