@@ -6,6 +6,10 @@ import { Loader2, Maximize, Minimize } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { Core, NodeSingular } from "cytoscape"
+import { useMemo } from "react"
+
+import fcose from "cytoscape-fcose"
+import cytoscape from "cytoscape"
 
 export default function MetaGrafo() {
   const [elements, setElements] = useState<{ group: string; data: any }[]>([])
@@ -96,41 +100,26 @@ export default function MetaGrafo() {
     fetchGraphData()
   }, [fetchGraphData])
 
+
+  cytoscape.use(fcose)
+  const layout = useMemo(() => ({
+    name: "fcose",
+    quality: "default",
+    nodeSeparation: 3000, 
+    idealEdgeLength: 200, 
+    nodeRepulsion: 100000, 
+    gravity: 0.1, 
+    animate: false,
+    fit: true,
+  }), [])
   useEffect(() => {
     applyFilters()
+  
+    if (cyRef.current) {
+      const layoutInstance = cyRef.current.layout(layout)
+      layoutInstance.run() 
+    }
   }, [applyFilters])
-
-  const layout = {
-    name: "cose",
-    animate: false,
-    nodeDimensionsIncludeLabels: true,
-    padding: 100,
-    componentSpacing: 150,
-    nodeRepulsion: (node) => {
-      const connections = node.data("connections") || 0
-      return 8000 + connections * 500
-    },
-    idealEdgeLength: (edge) => {
-      const sourceNode = edge.source()
-      const targetNode = edge.target()
-      const sourceConnections = sourceNode.data("connections") || 0
-      const targetConnections = targetNode.data("connections") || 0
-      const maxConnections = Math.max(sourceConnections, targetConnections)
-      return 100 + maxConnections * 5
-    },
-    edgeElasticity: 100,
-    nestingFactor: 5,
-    gravity: 0.5,
-    numIter: 2000,
-    initialTemp: 200,
-    coolingFactor: 0.95,
-    minTemp: 1.0,
-    randomize: true,
-    refresh: 20,
-    fit: true,
-    infinite: false,
-  }
-
   const stylesheet = [
     {
       selector: "node",
@@ -161,6 +150,7 @@ export default function MetaGrafo() {
         height: 50,
       },
     },
+    
     {
       selector: "edge",
       style: {
@@ -181,6 +171,14 @@ export default function MetaGrafo() {
         "loop-sweep": "60deg",
         "line-color": "#FF6347",
         "target-arrow-color": "#FF6347",
+      },
+    },
+    {
+      selector: `node[id = '${institutionFilter}']`,
+      style: {
+        "background-color": "#FFD700", 
+        "border-width": 3,
+        "border-color": "#FFA500",
       },
     },
     {
@@ -229,13 +227,18 @@ export default function MetaGrafo() {
           setSelectedInstitution(null)
         }
       })
-
-      if (elements.length > 0 && !layoutExecuted) {
-        cy.layout(layout).run()
-        setLayoutExecuted(true);
+  
+      if (!layoutExecuted) {
+        const layoutInstance = cy.layout(layout)
+        layoutInstance.run()
+        setLayoutExecuted(true)
       }
+  
+      
+      cy.resize()
+      cy.fit()
     },
-    [handleNodeClick, elements, layoutExecuted]
+    [handleNodeClick, layoutExecuted, layout],
   )
 
   if (loading) {
@@ -365,29 +368,36 @@ export default function MetaGrafo() {
       </div>
 
       {isFullscreen && (
-        <div className="fixed inset-0 z-50 bg-white">
-          <div className="border border-gray-300 rounded-lg relative" style={{ height: "100%" }}>
-            <button
-              onClick={toggleFullscreen}
-              className="absolute top-2 right-2 bg-white p-2 rounded-full shadow-md z-10"
-            >
-              <Minimize size={16} />
-            </button>
-            <CytoscapeComponent
-              elements={filteredElements}
-              stylesheet={stylesheet}
-              style={{ width: "100%", height: "100%" }}
-              minZoom={0.5}
-              maxZoom={2}
-              wheelSensitivity={0.2}
-              cy={initializeCytoscape}
-              userZoomingEnabled={true}
-              userPanningEnabled={true}
-              boxSelectionEnabled={false}
-            />
-          </div>
-        </div>
-      )}
+  <div className="fixed inset-0 z-50 bg-white">
+    <div className="border border-gray-300 rounded-lg relative" style={{ height: "100%" }}>
+      <button
+        onClick={toggleFullscreen}
+        className="absolute top-2 right-2 bg-white p-2 rounded-full shadow-md z-10"
+      >
+        <Minimize size={16} />
+      </button>
+      <CytoscapeComponent
+        elements={filteredElements} // Reutiliza os mesmos elementos
+        stylesheet={stylesheet} // Reutiliza o mesmo estilo
+        style={{ width: "100%", height: "100%" }}
+        minZoom={0.5}
+        maxZoom={2}
+        wheelSensitivity={0.2}
+        cy={(cy) => {
+          initializeCytoscape(cy)
+          setTimeout(() => {
+            const layoutInstance = cy.layout(layout)
+            layoutInstance.run()
+            cy.resize()
+          }, 0)
+        }}
+        userZoomingEnabled={true}
+        userPanningEnabled={true}
+        boxSelectionEnabled={false}
+      />
+    </div>
+  </div>
+)}
     </div>
   )
 }

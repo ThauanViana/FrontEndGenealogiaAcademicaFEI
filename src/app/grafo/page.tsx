@@ -14,37 +14,50 @@ export default function Grafo() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [institutions, setInstitutions] = useState<string[]>([])
+  const [pesquisadores, setPesquisadores] = useState<string[]>([])
   const [areas, setAreas] = useState<string[]>([])
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [filteredElements, setFilteredElements] = useState<{ group: string; data: any }[]>([])
+  const [isInitialLoad, setIsInitialLoad] = useState(true) // Estado para controlar a inicialização
 
   const fetchGraphData = useCallback(async () => {
     try {
       setLoading(true)
-      const response = await fetch("/api/graph-data")
+      const endpoint = isInitialLoad ? "/api/graph-data?initial=true" : "/api/graph-data"
+      console.log(`Fetching data from: ${endpoint}`) // Log para depuração
+      const response = await fetch(endpoint)
       if (!response.ok) {
         throw new Error("Falha ao buscar dados do grafo.")
       }
       const data = await response.json()
-
+  
       if (data.error) {
         throw new Error(data.error)
       }
-      console.log(data)
+  
+      console.log("Dados recebidos:", data)
       setElements([...data.nodes, ...data.edges])
+
       setInstitutions(data.metadata.institutions)
       setAreas(data.metadata.areas)
+  
+      if (isInitialLoad) {
+        setIsInitialLoad(false) // Define que a inicialização foi concluída
+      }
+  
       setLoading(false)
     } catch (err) {
       console.error("Erro ao buscar dados:", err)
       setError(err instanceof Error ? err.message : "Erro desconhecido")
       setLoading(false)
     }
-  }, [])
+  }, [isInitialLoad])
 
   useEffect(() => {
-    fetchGraphData()
-  }, [fetchGraphData])
+    if (isInitialLoad) {
+      fetchGraphData()
+    }
+  }, [isInitialLoad, fetchGraphData])
 
   const applyFilters = useCallback(() => {
     if (elements.length === 0) return []
@@ -150,6 +163,12 @@ export default function Grafo() {
       },
     },
     {
+      selector: "node[indicador_semente = 'true']", 
+      style: {
+        "background-color": "#FFD700", 
+      },
+    },
+    {
       selector: "edge",
       style: {
         width: 2,
@@ -159,7 +178,7 @@ export default function Grafo() {
         "curve-style": "bezier",
       },
     },
-  ]
+  ];
 
   if (loading) {
     return (
@@ -189,40 +208,52 @@ export default function Grafo() {
       <h1 className="text-3xl font-bold">Grafo de Genealogia Acadêmica</h1>
 
       <div className="flex flex-wrap gap-4">
-        <Input
-          placeholder="Filtrar por nome"
-          value={nameFilter}
-          onChange={(e) => setNameFilter(e.target.value)}
-          className="max-w-xs"
-        />
-        <Select value={institutionFilter} onValueChange={setInstitutionFilter}>
-          <SelectTrigger className="w-[280px]">
-            <SelectValue placeholder="Instituição" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Todas">Todas as Instituições</SelectItem>
-            {institutions.map((inst) => (
-              <SelectItem key={inst} value={inst}>
-                {inst}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={fieldFilter} onValueChange={setFieldFilter}>
-          <SelectTrigger className="w-[280px]">
-            <SelectValue placeholder="Área" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Todas">Todas as Áreas</SelectItem>
-            {areas.map((area) => (
-              <SelectItem key={area} value={area}>
-                {area}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
+  <Select value={nameFilter} onValueChange={setNameFilter}>
+    <SelectTrigger className="w-[280px]">
+      <SelectValue placeholder="Luciano Rossi" />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="Luciano Rossi">Luciano Rossi</SelectItem>
+      {[...new Set(elements.filter((el) => el.data?.label).map((el) => el.data.label))].map((name) => (
+        <SelectItem key={name} value={name}>
+          {name}
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+  <Select value={institutionFilter} onValueChange={setInstitutionFilter}>
+    <SelectTrigger className="w-[280px]">
+      <SelectValue placeholder="Instituição" />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="Todas">Todas as Instituições</SelectItem>
+      {institutions.map((inst) => (
+        <SelectItem key={inst} value={inst}>
+          {inst}
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+  <Select value={fieldFilter} onValueChange={setFieldFilter}>
+    <SelectTrigger className="w-[280px]">
+      <SelectValue placeholder="Área" />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="Todas">Todas as Áreas</SelectItem>
+      {areas.map((area) => (
+        <SelectItem key={area} value={area}>
+          {area}
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+</div>
+<button
+    onClick={fetchGraphData}
+    className="bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600"
+  >
+    Grafo com todos pesquisadores
+  </button>
       <div className="border border-gray-300 rounded-lg relative" style={{ height: "600px" }}>
         <button
           onClick={toggleFullscreen}
