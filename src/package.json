@@ -45,6 +45,7 @@
     "cmdk": "1.0.4",
     "cytoscape": "latest",
     "cytoscape-cola": "^2.5.1",
+    "cytoscape-elk": "^2.3.0",
     "cytoscape-fcose": "^2.2.0",
     "cytoscape-spread": "^3.0.0",
     "date-fns": "^3.6.0",
