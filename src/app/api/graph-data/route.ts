@@ -10,174 +10,134 @@ export async function GET(request: Request) {
   const session = driver.session()
 
   try {
-    
     const { searchParams } = new URL(request.url)
-    const isInitialLoad = searchParams.get("initial") === "true"
+    const pesquisadorId = searchParams.get("pesquisadorId")
+    const pesquisadorNome = searchParams.get("pesquisadorNome")
 
     let result
 
-    if (isInitialLoad) {
-      // Query para a primeira inicialização
-      result = await session.run(`
-        MATCH (alvo:Pesquisador {idLattes: "4231401119207209"})
-OPTIONAL MATCH (alvo)-[:ORIENTOU]->(orientados:Pesquisador)
-OPTIONAL MATCH (orientador:Pesquisador)-[:ORIENTOU]->(alvo)
-OPTIONAL MATCH (orientador)-[:ORIENTOU]->(coorientados:Pesquisador)
-WHERE coorientados.idLattes <> alvo.idLattes
+    if (pesquisadorId || pesquisadorNome) {
+      const query = `
+      MATCH (alvo:Pesquisador)
+      WHERE alvo.idLattes = $pesquisadorId OR alvo.nome = $pesquisadorNome
 
-WITH 
-  // Cria listas individuais e remove nulos com WHERE
-  COLLECT(DISTINCT CASE 
-    WHEN alvo.idLattes IS NOT NULL THEN {
-      id: alvo.idLattes,
-      label: alvo.nome,
-      instituicaoCorrespondente: alvo.instituicaoCorrespondente,
-      areaDoutorado: alvo.areaDoutorado,
-      indicador_semente: TOSTRING(alvo.indicador_semente)
-    }
-    ELSE NULL
-  END) AS alvoNode,
+      WITH alvo
+      OPTIONAL MATCH (ancestral:Pesquisador)-[:ORIENTOU]->(alvo)
+      WITH alvo, collect(DISTINCT ancestral) as ancestrais
+      OPTIONAL MATCH (alvo)-[:ORIENTOU]->(descendente:Pesquisador)
+      WITH alvo, ancestrais, collect(DISTINCT descendente) as descendentes
 
-  COLLECT(DISTINCT CASE 
-    WHEN orientados.idLattes IS NOT NULL THEN {
-      id: orientados.idLattes,
-      label: orientados.nome,
-      instituicaoCorrespondente: orientados.instituicaoCorrespondente,
-      areaDoutorado: orientados.areaDoutorado,
-      indicador_semente: TOSTRING(orientados.indicador_semente)
-    }
-    ELSE NULL
-  END) AS orientadosNodes,
+      // Combinar todos os nós relevantes
+      WITH alvo, ancestrais + descendentes + [alvo] as allNodes
 
-  COLLECT(DISTINCT CASE 
-    WHEN orientador.idLattes IS NOT NULL THEN {
-      id: orientador.idLattes,
-      label: orientador.nome,
-      instituicaoCorrespondente: orientador.instituicaoCorrespondente,
-      areaDoutorado: orientador.areaDoutorado,
-      indicador_semente: TOSTRING(orientador.indicador_semente)
-    }
-    ELSE NULL
-  END) AS orientadorNode,
+      // Primeiro coletar todos os nós para o Cytoscape
+      WITH allNodes, [node IN allNodes | {
+        group: 'nodes',
+        data: {
+          id: node.idLattes,
+          label: node.nome,
+          instituicaoCorrespondente: node.instituicaoCorrespondente,
+          areaDoutorado: node.areaDoutorado,
+          indicador_semente: TOSTRING(node.indicador_semente),
+          relevancia: size((node)-[:ORIENTOU]-()) + size(()-[:ORIENTOU]->(node))
+        }
+      }] as cyNodes
 
-  COLLECT(DISTINCT CASE 
-    WHEN coorientados.idLattes IS NOT NULL THEN {
-      id: coorientados.idLattes,
-      label: coorientados.nome,
-      instituicaoCorrespondente: coorientados.instituicaoCorrespondente,
-      areaDoutorado: coorientados.areaDoutorado,
-      indicador_semente: TOSTRING(coorientados.indicador_semente)
-    }
-    ELSE NULL
-  END) AS coorientadosNodes,
+      // Depois coletar todas as arestas entre esses nós
+      UNWIND allNodes as source
+      MATCH (source)-[r:ORIENTOU]->(target)
+      WHERE target IN allNodes
+      WITH DISTINCT cyNodes, collect(DISTINCT {
+        group: 'edges',
+        data: {
+          id: source.idLattes + '_to_' + target.idLattes,
+          source: source.idLattes,
+          target: target.idLattes
+        }
+      }) as cyEdges
 
-  // Relacionamentos
-  COLLECT(DISTINCT CASE 
-    WHEN orientados.idLattes IS NOT NULL THEN {
-      source: alvo.idLattes,
-      target: orientados.idLattes
-    }
-    ELSE NULL
-  END) AS rel1,
+      // Retornar elementos do Cytoscape e metadados
+      WITH cyNodes, cyEdges,
+          [node IN DISTINCT cyNodes WHERE node.data.instituicaoCorrespondente IS NOT NULL | node.data.instituicaoCorrespondente] as institutions,
+          [node IN DISTINCT cyNodes WHERE node.data.areaDoutorado IS NOT NULL | node.data.areaDoutorado] as areas
 
-  COLLECT(DISTINCT CASE 
-    WHEN orientador.idLattes IS NOT NULL THEN {
-      source: orientador.idLattes,
-      target: alvo.idLattes
-    }
-    ELSE NULL
-  END) AS rel2,
-
-  COLLECT(DISTINCT CASE 
-    WHEN coorientados.idLattes IS NOT NULL THEN {
-      source: orientador.idLattes,
-      target: coorientados.idLattes
-    }
-    ELSE NULL
-  END) AS rel3,
-
-  // Instituições e áreas
-  COLLECT(DISTINCT alvo.instituicaoCorrespondente) +
-  COLLECT(DISTINCT orientados.instituicaoCorrespondente) +
-  COLLECT(DISTINCT orientador.instituicaoCorrespondente) +
-  COLLECT(DISTINCT coorientados.instituicaoCorrespondente) AS instituicaoCorrespondente,
-
-  COLLECT(DISTINCT alvo.areaDoutorado) +
-  COLLECT(DISTINCT orientados.areaDoutorado) +
-  COLLECT(DISTINCT orientador.areaDoutorado) +
-  COLLECT(DISTINCT coorientados.areaDoutorado) AS areas
-
-WITH 
-  [n IN alvoNode + orientadosNodes + orientadorNode + coorientadosNodes WHERE n IS NOT NULL] AS nodes,
-  [r IN rel1 + rel2 + rel3 WHERE r.source IS NOT NULL AND r.target IS NOT NULL] AS relationships,
-  instituicaoCorrespondente,
-  areas
-
-RETURN {
-  instituicaoCorrespondente: instituicaoCorrespondente,
-  areas: areas,
-  nodes: nodes,
-  edges: relationships
-} AS result
-
-
-
-      `)
-    } else {
-      // Query principal para filtros e outras operações
-      result = await session.run(`
-        MATCH (n:Pesquisador)
-        OPTIONAL MATCH (n)-[r:ORIENTOU]->(m:Pesquisador)
-        WITH COLLECT(DISTINCT n.instituicaoCorrespondente) as instituicaoCorrespondente,
-             COLLECT(DISTINCT n.areaDoutorado) as areas,
-             COLLECT(DISTINCT {
-               id: n.idLattes,
-               label: n.nome,
-               indicador_semente: TOSTRING(n.indicador_semente),
-               instituicaoCorrespondente: n.instituicaoCorrespondente,
-               areaDoutorado: n.areaDoutorado
-             }) as nodes,
-             COLLECT(DISTINCT {
-               source: n.idLattes,
-               target: m.idLattes
-             }) as relationships
-        RETURN {
-          instituicaoCorrespondente: instituicaoCorrespondente,
+      RETURN {
+        elements: cyNodes + cyEdges,
+        metadata: {
+          institutions: institutions,
           areas: areas,
-          nodes: nodes,
-          edges: [rel IN relationships WHERE rel.source IS NOT NULL AND rel.target IS NOT NULL]
+          nodeCount: size(cyNodes)
+        }
+      } as result
+    `
+
+      result = await session.run(query, pesquisadorId ? { pesquisadorId } : { pesquisadorNome })
+    } else {
+      result = await session.run(
+        `
+        MATCH (p:Pesquisador)
+        WITH p, size((p)-[:ORIENTOU]->()) + size(()-[:ORIENTOU]->(p)) as relevancia
+        ORDER BY relevancia DESC
+        WITH collect({
+          group: 'nodes',
+          data: {
+            id: p.idLattes,
+            label: p.nome,
+            instituicaoCorrespondente: p.instituicaoCorrespondente,
+            areaDoutorado: p.areaDoutorado,
+            indicador_semente: TOSTRING(p.indicador_semente),
+            relevancia: relevancia
+          }
+        }) as cyNodes, collect(p) as allNodes
+        
+        // Coletar instituições e áreas para os metadados
+        WITH cyNodes, allNodes,
+            [node IN allNodes WHERE node.instituicaoCorrespondente IS NOT NULL | node.instituicaoCorrespondente] as institutions,
+            [node IN allNodes WHERE node.areaDoutorado IS NOT NULL | node.areaDoutorado] as areas
+        
+        UNWIND allNodes as source
+        MATCH (source)-[r:ORIENTOU]->(target)
+        WHERE target IN allNodes
+        WITH cyNodes, collect({
+          group: 'edges',
+          data: {
+            id: source.idLattes + '_to_' + target.idLattes,
+            source: source.idLattes,
+            target: target.idLattes
+          }
+        }) as cyEdges, institutions, areas
+        
+        RETURN {
+          elements: cyNodes + cyEdges,
+          metadata: {
+            institutions: institutions,
+            areas: areas,
+            nodeCount: size(cyNodes)
+          }
         } as result
-      `)
-    }
+        `);    
+      }
 
-    const data = result.records[0].get("result")
+    const data = result.records[0].get("result");
 
-    // Formata os dados para o Cytoscape
-    const nodes = data.nodes.map((node) => ({
-      data: {
-        ...node,
-        id: node.id,
-      },
-    }))
-
-    const edges = data.edges.map((edge, index) => ({
-      data: {
-        ...edge,
-        id: `e${index}`,
-      },
-    }))
-
-    await session.close()
-    await driver.close()
-
-    return NextResponse.json({
-      nodes,
-      edges,
+    const convertedData = {
+      elements: data.elements.map((element: any) => ({
+        ...element,
+        data: {
+          ...element.data,
+          relevancia: element.data.relevancia?.toNumber?.() || element.data.relevancia, // Converter relevância, se for Integer
+        },
+      })),
       metadata: {
-        institutions: data.instituicaoCorrespondente?.filter(Boolean).sort() || [],
-        areas: data.areas?.filter(Boolean).sort() || [],
+        institutions: data.metadata.institutions || [], // Provide default empty array if undefined
+        areas: data.metadata.areas || [], // Provide default empty array if undefined
+        nodeCount: data.metadata.nodeCount?.toNumber?.() || data.metadata.nodeCount || 0, // Converter nodeCount, se for Integer
       },
-    })
+    };
+    await session.close();
+    await driver.close();
+
+    return NextResponse.json(convertedData);
   } catch (error) {
     console.error("Error fetching graph data:", error)
     return NextResponse.json({ error: "Falha ao consultar dados do grafo." }, { status: 500 })

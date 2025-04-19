@@ -1,158 +1,93 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import CytoscapeComponent from "react-cytoscapejs"
-import { Input } from "@/components/ui/input"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
-import { Loader2, Maximize, Minimize } from "lucide-react" // Use 'Maximize' e 'Minimize' como ícones alternativos
-import { useMemo } from "react"
+import { Loader2, Maximize, Minimize, Search, ZoomIn } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { useDebounce } from "@/hooks/use-debounce"
+import type { Core } from "cytoscape"
+import cytoscape from "cytoscape"
+import elk from "cytoscape-elk"
+
+cytoscape.use(elk)
 
 export default function Grafo() {
-  const [elements, setElements] = useState<{ group: string; data: any }[]>([])
-  const [nameFilter, setNameFilter] = useState("")
+  const [graphData, setGraphData] = useState<any[]>([])
+  const [cytoscapeElements, setCytoscapeElements] = useState<any[]>([])
+  const [selectedPesquisador, setSelectedPesquisador] = useState<{ id: string; nome: string } | null>(null)
   const [institutionFilter, setInstitutionFilter] = useState("Todas")
-  const [fieldFilter, setFieldFilter] = useState("Todas")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [institutions, setInstitutions] = useState<string[]>([])
-  const [pesquisadores, setPesquisadores] = useState<string[]>([])
   const [areas, setAreas] = useState<string[]>([])
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [filteredElements, setFilteredElements] = useState<{ group: string; data: any }[]>([])
-  const [isInitialLoad, setIsInitialLoad] = useState(true) // Estado para controlar a inicialização
+  const [selectedNode, setSelectedNode] = useState(null)
+  const [nodeCount, setNodeCount] = useState(0)
+  const cyRef = useRef<Core | null>(null)
 
-  const fetchGraphData = useCallback(async () => {
-    try {
-      setLoading(true)
-      const endpoint = isInitialLoad ? "/api/graph-data?initial=true" : "/api/graph-data"
-      console.log(`Fetching data from: ${endpoint}`) // Log para depuração
-      const response = await fetch(endpoint)
-      if (!response.ok) {
-        throw new Error("Falha ao buscar dados do grafo.")
-      }
-      const data = await response.json()
-  
-      if (data.error) {
-        throw new Error(data.error)
-      }
-  
-      console.log("Dados recebidos:", data)
-      setElements([...data.nodes, ...data.edges])
+  const [open, setOpen] = useState(false)
+  const [searchValue, setSearchValue] = useState("")
+  const [pesquisadores, setPesquisadores] = useState<{ id: string; nome: string }[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
 
-      setInstitutions(data.metadata.institutions)
-      setAreas(data.metadata.areas)
-  
-      if (isInitialLoad) {
-        setIsInitialLoad(false) 
-      }
-  
-      setLoading(false)
-    } catch (err) {
-      console.error("Erro ao buscar dados:", err)
-      setError(err instanceof Error ? err.message : "Erro desconhecido")
-      setLoading(false)
-    }
-  }, [isInitialLoad])
-  const uniqueSortedNames = useMemo(() => {
-    return [...new Set(elements.filter((el) => el.data?.label).map((el) => el.data.label))]
-      .sort((a, b) => a.localeCompare(b));
-  }, [elements]);
+  const debouncedSearchValue = useDebounce(searchValue, 300)
 
-  useEffect(() => {
-    if (isInitialLoad) {
-      fetchGraphData()
-    }
-  }, [isInitialLoad, fetchGraphData])
+  const fetchGraphData = useCallback(
+    async (pesquisadorId?: string, pesquisadorNome?: string) => {
+      try {
+        setLoading(true)
 
-  
-  const applyFilters = useCallback(() => {
-    if (elements.length === 0) return []
+        let endpoint = "/api/graph-data"
 
-    
-    if (nameFilter === "" && institutionFilter === "Todas" && fieldFilter === "Todas") {
-      return elements
-    }
-
-   
-    const filteredNodes = elements.filter((el) => {
-      if (!el.data || !el.data.label) return false
-
-      const nameMatch = nameFilter === "" || el.data.label.toLowerCase().includes(nameFilter.toLowerCase())
-      const institutionMatch = institutionFilter === "Todas" || el.data.instituicaoCorrespondente === institutionFilter
-      const fieldMatch = fieldFilter === "Todas" || el.data.areaDoutorado === fieldFilter
-
-      return nameMatch && institutionMatch && fieldMatch
-    })
-
-    console.log("Filtered Nodes:", filteredNodes)
-
-   
-    const filteredNodeIds = new Set(filteredNodes.map((node) => node.data.id))
-
-    
-    const addConnectedElements = (nodeId) => {
-      elements.forEach((el) => {
-        if (el.data && el.data.source && el.data.target) {
-          if (el.data.source === nodeId || el.data.target === nodeId) {
-            if (!filteredNodeIds.has(el.data.source)) {
-              filteredNodeIds.add(el.data.source)
-              addConnectedElements(el.data.source)
-            }
-            if (!filteredNodeIds.has(el.data.target)) {
-              filteredNodeIds.add(el.data.target)
-              addConnectedElements(el.data.target)
-            }
-          }
+        if (pesquisadorId) {
+          endpoint = `/api/graph-data?pesquisadorId=${encodeURIComponent(pesquisadorId)}`
+        } else if (pesquisadorNome) {
+          endpoint = `/api/graph-data?pesquisadorNome=${encodeURIComponent(pesquisadorNome)}`
         }
-      })
-    }
 
-    
-    filteredNodes.forEach((node) => addConnectedElements(node.data.id))
+        console.log(`Fetching data from: ${endpoint}`)
+        const response = await fetch(endpoint)
 
-    
-    const finalFilteredNodes = elements.filter((el) => el.data && filteredNodeIds.has(el.data.id))
-    const finalFilteredEdges = elements.filter((el) => el.data && el.data.source && filteredNodeIds.has(el.data.source) && filteredNodeIds.has(el.data.target))
+        if (!response.ok) {
+          throw new Error("Falha ao buscar dados do grafo.")
+        }
 
-    console.log("Final Filtered Nodes:", finalFilteredNodes)
-    console.log("Final Filtered Edges:", finalFilteredEdges)
+        const data = await response.json()
 
-    return [...finalFilteredNodes, ...finalFilteredEdges]
-  }, [elements, nameFilter, institutionFilter, fieldFilter])
+        if (data.error) {
+          throw new Error(data.error)
+        }
+
+        setCytoscapeElements(data.elements)
+        setInstitutions(data.metadata.institutions)
+        setAreas(data.metadata.areas)
+        setNodeCount(data.metadata.nodeCount)
+
+        setLoading(false)
+      } catch (err) {
+        console.error("Erro ao buscar dados:", err)
+        setError(err instanceof Error ? err.message : "Erro desconhecido")
+        setLoading(false)
+      }
+    },
+    [],
+  )
 
   useEffect(() => {
-    const filtered = applyFilters()
-    setFilteredElements(filtered)
-  }, [applyFilters])
+    fetchGraphData()
+  }, [fetchGraphData])
 
-  const layout = {
-    name: "cose",
-    animate: false,
-    nodeDimensionsIncludeLabels: true,
-    padding: 50,
-    componentSpacing: 100,
-    nodeRepulsion: 8000,
-    idealEdgeLength: 100,
-    edgeElasticity: 100,
-    nestingFactor: 5,
-    gravity: 80,
-    numIter: 1000,
-    initialTemp: 200,
-    coolingFactor: 0.95,
-    minTemp: 1.0,
-    randomize: true,
-    refresh: 20,
-    fit: true,
-  }
-  console.log("data")
   const stylesheet = [
     {
       selector: "node",
       style: {
         "background-color": "#6495ED",
         label: "data(label)",
-        width: 30,
-        height: 30,
+        width: "mapData(relevancia, 0, 50, 20, 40)",
+        height: "mapData(relevancia, 0, 50, 20, 40)",
         "font-size": 12,
         "text-valign": "bottom",
         "text-halign": "center",
@@ -163,15 +98,16 @@ export default function Grafo() {
       },
     },
     {
-      selector: "node[instituicaoCorrespondente = 'Centro Universitario Fundacao Educacional Inaciana Pe Saboia Medeiros']",
+      selector:
+        "node[instituicaoCorrespondente = 'Centro Universitario Fundacao Educacional Inaciana Pe Saboia Medeiros']",
       style: {
         "background-color": "#FF6347",
       },
     },
     {
-      selector: "node[indicador_semente = 'true']", 
+      selector: "node[indicador_semente = 'true']",
       style: {
-        "background-color": "#FFD700", 
+        "background-color": "#FFD700",
       },
     },
     {
@@ -184,7 +120,24 @@ export default function Grafo() {
         "curve-style": "bezier",
       },
     },
-  ];
+    {
+      selector: "node:selected",
+      style: {
+        "background-color": "#9C27B0", 
+        "border-width": 3,
+        "border-color": "#E1BEE7",
+        "text-outline-color": "#E1BEE7",
+        "text-outline-width": 3,
+      },
+    },
+    {
+      selector: `node[instituicaoCorrespondente = '${institutionFilter}']`,
+      style: {
+        "border-width": 3,
+        "border-color": "#4CAF50",
+      },
+    },
+  ]
 
   if (loading) {
     return (
@@ -209,104 +162,113 @@ export default function Grafo() {
     setIsFullscreen(!isFullscreen)
   }
 
- 
-  
+  const handlePesquisadorSelect = (pesquisador: { id: string; nome: string }) => {
+    setSelectedPesquisador(pesquisador)
+    setOpen(false)
+    fetchGraphData(pesquisador.id)
+  }
+
+  const zoomToFit = () => {
+    if (cyRef.current) {
+      cyRef.current.fit()
+    }
+  }
+
+  const zoomToSelection = () => {
+    if (cyRef.current && selectedNode) {
+      const node = cyRef.current.getElementById(selectedNode.id)
+      if (node.length > 0) {
+        cyRef.current.animate({
+          zoom: 2,
+          center: { eles: node },
+        })
+      }
+    }
+  }
+
+  const elkLayout = {
+    name: "elk",
+    elk: {
+      algorithm: "mrtree", 
+      direction: "DOWN", 
+      spacing: 50,
+      "nodePlacement.strategy": "NETWORK_SIMPLEX",
+      "separateConnectedComponents": true,
+      "componentSpacing": 600,
+      "edgeSpacingFactor": 30,
+    },
+    fit: true, 
+    animate: false,
+  }
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Grafo de Genealogia Acadêmica</h1>
 
       <div className="flex flex-wrap gap-4">
-      <Select value={nameFilter} onValueChange={setNameFilter}>
-  <SelectTrigger className="w-[280px]">
-    <SelectValue placeholder="Todos" />
-  </SelectTrigger>
-  <SelectContent>
-    {uniqueSortedNames.map((name) => (
-      <SelectItem key={name} value={name}>
-        {name}
-      </SelectItem>
-    ))}
-  </SelectContent>
-</Select>
-  <Select value={institutionFilter} onValueChange={setInstitutionFilter}>
-    <SelectTrigger className="w-[280px]">
-      <SelectValue placeholder="Instituição" />
-    </SelectTrigger>
-    <SelectContent>
-      <SelectItem value="Todas">Todas as Instituições</SelectItem>
-      {institutions.slice() 
-      .sort((a, b) => a.localeCompare(b)) 
-      .map((inst)=> (
-        <SelectItem key={inst} value={inst}>
-          {inst}
-        </SelectItem>
-      ))}
-    </SelectContent>
-  </Select>
-  <Select value={fieldFilter} onValueChange={setFieldFilter}>
-    <SelectTrigger className="w-[280px]">
-      <SelectValue placeholder="Área" />
-    </SelectTrigger>
-    <SelectContent>
-      <SelectItem value="Todas">Todas as Áreas</SelectItem>
-      {areas.slice() 
-      .sort((a, b) => a.localeCompare(b)) 
-      .map((area) => (
-        <SelectItem key={area} value={area}>
-          {area}
-        </SelectItem>
-      ))}
-    </SelectContent>
-  </Select>
-  <button
-    onClick={fetchGraphData}
-    className="bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600 ml-auto"
-  >
-    Grafo com todos pesquisadores
-  </button>
-</div>
+        <Select value={institutionFilter} onValueChange={setInstitutionFilter}>
+          <SelectTrigger className="w-[280px]">
+            <SelectValue placeholder="Instituição" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Todas">Todas as Instituições</SelectItem>
+            {institutions
+              .slice()
+              .sort((a, b) => a.localeCompare(b))
+              .map((inst) => (
+                <SelectItem key={inst} value={inst}>
+                  {inst}
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
+
+        <button
+          onClick={() => {
+            setSelectedPesquisador(null)
+            fetchGraphData()
+          }}
+          className="bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600 ml-auto"
+        >
+          Recarregar grafo
+        </button>
+      </div>
 
       <div className="border border-gray-300 rounded-lg relative" style={{ height: "600px" }}>
-        <button
-          onClick={toggleFullscreen}
-          className="absolute top-2 right-2 bg-white p-2 rounded-full shadow-md z-10"
-        >
+        <button onClick={toggleFullscreen} className="absolute top-2 right-2 bg-white p-2 rounded-full shadow-md z-10">
           {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
         </button>
         <CytoscapeComponent
-          key={JSON.stringify(filteredElements)}
-          elements={filteredElements}
-          layout={layout}
-          stylesheet={stylesheet}
-          style={{ width: "100%", height: "100%" }}
-          minZoom={0.5}
-          maxZoom={2}
-          wheelSensitivity={0.2}
-        />
-      </div>
+        elements={cytoscapeElements}
+        stylesheet={stylesheet}
+        style={{ width: "100%", height: "100%" }}
+        minZoom={0.1}
+        maxZoom={3}
+        wheelSensitivity={0.2}
+        cy={(cy) => {
+          cyRef.current = cy
 
-      {isFullscreen && (
-        <div className="fixed inset-0 z-50 bg-white">
-          <div className="border border-gray-300 rounded-lg relative" style={{ height: "100%" }}>
-            <button
-              onClick={toggleFullscreen}
-              className="absolute top-2 right-2 bg-white p-2 rounded-full shadow-md z-10"
-            >
-              <Minimize size={16} />
-            </button>
-            <CytoscapeComponent
-              key={JSON.stringify(filteredElements)}
-              elements={filteredElements}
-              layout={layout}
-              stylesheet={stylesheet}
-              style={{ width: "100%", height: "100%" }}
-              minZoom={0.5}
-              maxZoom={2}
-              wheelSensitivity={0.2}
-            />
-          </div>
-        </div>
-      )}
+          const layout = cy.layout(elkLayout)
+          layout.run()
+
+          cy.on("tap", "node", (evt) => {
+            const node = evt.target
+            setSelectedNode(node.data())
+
+            cy.elements().unselect()
+
+            node.select()
+          })
+
+          cy.on("tap", (evt) => {
+            if (evt.target === cy) {
+              cy.elements().unselect()
+              setSelectedNode(null)
+            }
+          })
+        }}
+      />
+      </div>
     </div>
   )
 }
