@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
 import neo4j from "neo4j-driver"
 
+export const dynamic = "force-dynamic";
+
+
 export async function GET() {
   const uri = process.env.NEO4J_URI
   const user = process.env.NEO4J_USER
