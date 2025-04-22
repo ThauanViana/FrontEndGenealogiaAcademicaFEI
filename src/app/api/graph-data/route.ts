@@ -1,20 +1,21 @@
-import { NextResponse } from "next/server"
-import neo4j from "neo4j-driver"
+import { NextResponse } from "next/server";
+import neo4j from "neo4j-driver";
 
 export async function GET(request: Request) {
-  const uri = process.env.NEO4J_URI
-  const user = process.env.NEO4J_USER
-  const password = process.env.NEO4J_PASSWORD
+  const uri = process.env.NEO4J_URI;
+  const user = process.env.NEO4J_USER;
+  const password = process.env.NEO4J_PASSWORD;
 
-  const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
-  const session = driver.session()
+  const driver = neo4j.driver(uri, neo4j.auth.basic(user, password));
+  const session = driver.session();
 
   try {
-    const { searchParams } = new URL(request.url)
-    const pesquisadorId = searchParams.get("pesquisadorId")
-    const pesquisadorNome = searchParams.get("pesquisadorNome")
+    // Extraindo os parâmetros de consulta diretamente
+    const { searchParams } = new URL(request.url);
+    const pesquisadorId = searchParams.get("pesquisadorId");
+    const pesquisadorNome = searchParams.get("pesquisadorNome");
 
-    let result
+    let result;
 
     if (pesquisadorId || pesquisadorNome) {
       const query = `
@@ -69,9 +70,9 @@ export async function GET(request: Request) {
           nodeCount: size(cyNodes)
         }
       } as result
-    `
+    `;
 
-      result = await session.run(query, pesquisadorId ? { pesquisadorId } : { pesquisadorNome })
+      result = await session.run(query, pesquisadorId ? { pesquisadorId } : { pesquisadorNome });
     } else {
       result = await session.run(
         `
@@ -115,8 +116,9 @@ export async function GET(request: Request) {
             nodeCount: size(cyNodes)
           }
         } as result
-        `);    
-      }
+        `
+      );
+    }
 
     const data = result.records[0].get("result");
 
@@ -134,12 +136,13 @@ export async function GET(request: Request) {
         nodeCount: data.metadata.nodeCount?.toNumber?.() || data.metadata.nodeCount || 0, // Converter nodeCount, se for Integer
       },
     };
+
     await session.close();
     await driver.close();
 
     return NextResponse.json(convertedData);
   } catch (error) {
-    console.error("Error fetching graph data:", error)
-    return NextResponse.json({ error: "Falha ao consultar dados do grafo." }, { status: 500 })
+    console.error("Error fetching graph data:", error);
+    return NextResponse.json({ error: "Falha ao consultar dados do grafo." }, { status: 500 });
   }
 }
