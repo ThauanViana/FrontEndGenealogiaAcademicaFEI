@@ -1,93 +1,205 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useCallback, useRef } from "react"
-import CytoscapeComponent from "react-cytoscapejs"
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
-import { Loader2, Maximize, Minimize, Search, ZoomIn } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { useDebounce } from "@/hooks/use-debounce"
-import type { Core } from "cytoscape"
-import cytoscape from "cytoscape"
-import elk from "cytoscape-elk"
+import { useState, useEffect, useCallback, useRef } from "react";
+import CytoscapeComponent from "react-cytoscapejs";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Loader2, Maximize, Minimize } from "lucide-react";
+import type { Core } from "cytoscape";
+import cytoscape from "cytoscape";
+import elk from "cytoscape-elk";
 
-cytoscape.use(elk)
+cytoscape.use(elk);
 
 export default function Grafo() {
-  const [graphData, setGraphData] = useState<any[]>([])
-  const [cytoscapeElements, setCytoscapeElements] = useState<any[]>([])
-  const [selectedPesquisador, setSelectedPesquisador] = useState<{ id: string; nome: string } | null>(null)
-  const [institutionFilter, setInstitutionFilter] = useState("Todas")
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [institutions, setInstitutions] = useState<string[]>([])
-  const [areas, setAreas] = useState<string[]>([])
-  const [isFullscreen, setIsFullscreen] = useState(false)
-  const [selectedNode, setSelectedNode] = useState(null)
-  const [nodeCount, setNodeCount] = useState(0)
-  const cyRef = useRef<Core | null>(null)
+  const [graphData, setGraphData] = useState<any[]>([]);
+  const [cytoscapeElements, setCytoscapeElements] = useState<any[]>([]);
+  const [selectedPesquisador, setSelectedPesquisador] = useState<{ id: string; nome: string } | null>(null);
+  const [institutionFilter, setInstitutionFilter] = useState("Todas");
+  const [labelFilter, setLabelFilter] = useState("Todos");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [institutions, setInstitutions] = useState<string[]>([]);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  //const [selectedNode, setSelectedNode] = useState(null);
+  const cyRef = useRef<Core | null>(null);
+  const [selectedNode, setSelectedNode] = useState<any>(null);
 
-  const [open, setOpen] = useState(false)
-  const [searchValue, setSearchValue] = useState("")
-  const [pesquisadores, setPesquisadores] = useState<{ id: string; nome: string }[]>([])
-  const [searchLoading, setSearchLoading] = useState(false)
+  const fetchGraphData = useCallback(async (pesquisadorId?: string) => {
+    try {
+      setLoading(true);
 
-  const debouncedSearchValue = useDebounce(searchValue, 300)
-
-  const fetchGraphData = useCallback(
-    async (pesquisadorId?: string, pesquisadorNome?: string) => {
-      try {
-        setLoading(true)
-
-        let endpoint = "/api/graph-data"
-
-        if (pesquisadorId) {
-          endpoint = `/api/graph-data?pesquisadorId=${encodeURIComponent(pesquisadorId)}`
-        } else if (pesquisadorNome) {
-          endpoint = `/api/graph-data?pesquisadorNome=${encodeURIComponent(pesquisadorNome)}`
-        }
-
-        console.log(`Fetching data from: ${endpoint}`)
-        const response = await fetch(endpoint)
-
-        if (!response.ok) {
-          throw new Error("Falha ao buscar dados do grafo.")
-        }
-
-        const data = await response.json()
-
-        if (data.error) {
-          throw new Error(data.error)
-        }
-
-        setCytoscapeElements(data.elements)
-        setInstitutions(data.metadata.institutions)
-        setAreas(data.metadata.areas)
-        setNodeCount(data.metadata.nodeCount)
-
-        setLoading(false)
-      } catch (err) {
-        console.error("Erro ao buscar dados:", err)
-        setError(err instanceof Error ? err.message : "Erro desconhecido")
-        setLoading(false)
+      let endpoint = "/api/graph-data";
+      if (pesquisadorId) {
+        endpoint = `/api/graph-data?pesquisadorId=${encodeURIComponent(pesquisadorId)}`;
       }
-    },
-    [],
-  )
+
+      const response = await fetch(endpoint);
+      if (!response.ok) {
+        throw new Error("Falha ao buscar dados do grafo.");
+      }
+
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      // Adiciona a propriedade "iniciais" aos nós
+      const elementsWithInitials = data.elements.map((el) => {
+        if (el.group === "nodes" && el.data.label) {
+          const initials = el.data.label
+            .split(" ")
+            .map((word) => word[0].toUpperCase() + ".")
+            .join(" ");
+          return {
+            ...el,
+            data: {
+              ...el.data,
+              iniciais: initials, // Adiciona a propriedade iniciais
+            },
+          };
+        }
+        return el;
+      });
+
+      setGraphData(elementsWithInitials);
+      setCytoscapeElements(elementsWithInitials);
+      setInstitutions(data.metadata.institutions);
+      setLoading(false);
+
+      console.log("Dados recebidos:", elementsWithInitials);
+    } catch (err) {
+      console.error("Erro ao buscar dados:", err);
+      setError(err instanceof Error ? err.message : "Erro desconhecido");
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    fetchGraphData()
-  }, [fetchGraphData])
+    fetchGraphData();
+  }, [fetchGraphData]);
 
+  useEffect(() => {
+    if (cyRef.current) {
+      const cy = cyRef.current;
+      const currentZoom = cy.zoom();
+    const currentPan = cy.pan();
+      // Remove todos os elementos existentes
+      cy.elements().remove();
+
+      // Adiciona os novos elementos filtrados
+      cy.add(cytoscapeElements);
+
+      // Reaplica o layout
+      const layout = cy.layout({
+        name: "elk",
+        elk: {
+          algorithm: "mrtree",
+          direction: "DOWN",
+          spacing: 50,
+          "nodePlacement.strategy": "NETWORK_SIMPLEX",
+          "separateConnectedComponents": true,
+          "componentSpacing": 600,
+          "edgeSpacingFactor": 30,
+        },
+        fit: true,
+        animate: false,
+      });
+      layout.run();
+
+      // Ajusta o zoom para caber no grafo
+      // Restaura o estado de zoom e pan
+    cy.zoom(currentZoom);
+    cy.pan(currentPan);
+    }
+  }, [cytoscapeElements]);
+
+  const handleInstitutionFilterChange = (value: string) => {
+    setInstitutionFilter(value);
+
+    if (value === "Todas") {
+      setCytoscapeElements(graphData); // Mostra todos os elementos
+    } else {
+      // Filtra os nós que pertencem à instituição selecionada
+      const filteredNodes = graphData.filter(
+        (el) =>
+          el.group === "nodes" &&
+          (el.data.instituicaoCorrespondente === value || el.data.indicador_semente === "true")
+      );
+
+      // Cria um conjunto com os IDs dos nós filtrados
+      const filteredNodeIds = new Set(filteredNodes.map((node) => node.data.id));
+
+      // Filtra as arestas que conectam os nós filtrados
+      const filteredEdges = graphData.filter(
+        (el) =>
+          el.group === "edges" &&
+          filteredNodeIds.has(el.data.source) &&
+          filteredNodeIds.has(el.data.target)
+      );
+
+      // Atualiza os elementos do grafo com os nós e arestas filtrados
+      setCytoscapeElements([...filteredNodes, ...filteredEdges]);
+    }
+  };
+
+  const handleLabelFilterChange = (value: string) => {
+    setLabelFilter(value);
+
+    if (value === "Todos") {
+      setCytoscapeElements(graphData); // Mostra todos os elementos
+    } else {
+      // Filtra os nós que possuem o label selecionado
+      const filteredNodes = graphData.filter(
+        (el) => el.group === "nodes" && el.data.label === value
+      );
+
+      // Cria um conjunto com os IDs dos nós filtrados
+      const filteredNodeIds = new Set(filteredNodes.map((node) => node.data.id));
+
+      // Adiciona recursivamente os nós conectados
+      const addConnectedNodes = (nodeId: string) => {
+        graphData.forEach((el) => {
+          if (el.group === "edges" && (el.data.source === nodeId || el.data.target === nodeId)) {
+            const connectedNodeId = el.data.source === nodeId ? el.data.target : el.data.source;
+            if (!filteredNodeIds.has(connectedNodeId)) {
+              filteredNodeIds.add(connectedNodeId);
+              addConnectedNodes(connectedNodeId); // Recursivamente adiciona nós conectados
+            }
+          }
+        });
+      };
+
+      // Inicia a busca recursiva para cada nó filtrado
+      filteredNodes.forEach((node) => addConnectedNodes(node.data.id));
+
+      // Filtra os nós finais com base nos IDs coletados
+      const finalFilteredNodes = graphData.filter(
+        (el) => el.group === "nodes" && filteredNodeIds.has(el.data.id)
+      );
+
+      // Filtra as arestas que conectam os nós finais
+      const filteredEdges = graphData.filter(
+        (el) =>
+          el.group === "edges" &&
+          filteredNodeIds.has(el.data.source) &&
+          filteredNodeIds.has(el.data.target)
+      );
+
+      // Atualiza os elementos do grafo com os nós e arestas filtrados
+      setCytoscapeElements([...finalFilteredNodes, ...filteredEdges]);
+    }
+  };
+
+
+  
   const stylesheet = [
     {
       selector: "node",
       style: {
         "background-color": "#6495ED",
-        label: "data(label)",
-        width: "mapData(relevancia, 0, 50, 20, 40)",
-        height: "mapData(relevancia, 0, 50, 20, 40)",
+        label: "data(iniciais)", // Exibe as iniciais no lugar do label
+        width: "mapData(relevancia, 0, 50, 20, 40)", // Mapeia largura com base em relevancia
+        height: "mapData(relevancia, 0, 50, 20, 40)", // Mapeia altura com base em relevancia
         "font-size": 12,
         "text-valign": "bottom",
         "text-halign": "center",
@@ -98,16 +210,16 @@ export default function Grafo() {
       },
     },
     {
-      selector:
-        "node[instituicaoCorrespondente = 'Centro Universitario Fundacao Educacional Inaciana Pe Saboia Medeiros']",
+      selector: "node[!relevancia]", // Nós sem relevancia
       style: {
-        "background-color": "#FF6347",
+        width: 20, // Valor padrão
+        height: 20, // Valor padrão
       },
     },
     {
-      selector: "node[indicador_semente = 'true']",
+      selector: "node[indicador_semente = 'true']", // Nós marcados como sementes
       style: {
-        "background-color": "#FFD700",
+        "background-color": "#FFD700", // Cor amarela para as sementes
       },
     },
     {
@@ -120,24 +232,7 @@ export default function Grafo() {
         "curve-style": "bezier",
       },
     },
-    {
-      selector: "node:selected",
-      style: {
-        "background-color": "#9C27B0", 
-        "border-width": 3,
-        "border-color": "#E1BEE7",
-        "text-outline-color": "#E1BEE7",
-        "text-outline-width": 3,
-      },
-    },
-    {
-      selector: `node[instituicaoCorrespondente = '${institutionFilter}']`,
-      style: {
-        "border-width": 3,
-        "border-color": "#4CAF50",
-      },
-    },
-  ]
+  ];
 
   if (loading) {
     return (
@@ -147,7 +242,7 @@ export default function Grafo() {
           <p>Carregando dados do grafo...</p>
         </div>
       </div>
-    )
+    );
   }
 
   if (error) {
@@ -155,120 +250,133 @@ export default function Grafo() {
       <div className="flex items-center justify-center h-[600px] text-destructive">
         <p>Erro: {error}</p>
       </div>
-    )
+    );
   }
 
   const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen)
-  }
-
-  const handlePesquisadorSelect = (pesquisador: { id: string; nome: string }) => {
-    setSelectedPesquisador(pesquisador)
-    setOpen(false)
-    fetchGraphData(pesquisador.id)
-  }
-
-  const zoomToFit = () => {
-    if (cyRef.current) {
-      cyRef.current.fit()
-    }
-  }
-
-  const zoomToSelection = () => {
-    if (cyRef.current && selectedNode) {
-      const node = cyRef.current.getElementById(selectedNode.id)
-      if (node.length > 0) {
-        cyRef.current.animate({
-          zoom: 2,
-          center: { eles: node },
-        })
-      }
-    }
-  }
-
-  const elkLayout = {
-    name: "elk",
-    elk: {
-      algorithm: "mrtree", 
-      direction: "DOWN", 
-      spacing: 50,
-      "nodePlacement.strategy": "NETWORK_SIMPLEX",
-      "separateConnectedComponents": true,
-      "componentSpacing": 600,
-      "edgeSpacingFactor": 30,
-    },
-    fit: true, 
-    animate: false,
-  }
-
+    setIsFullscreen(!isFullscreen);
+  };
+  const keyMapping: { [key: string]: string } = {
+    label: "Nome",
+    instituicaoCorrespondente: "Instituição",
+    id: "Id Lattes",
+    areaDoutorado: "Área Doutorado"
+  };
   return (
+    
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Grafo de Genealogia Acadêmica</h1>
+    <h1 className="text-3xl font-bold">Grafo de Genealogia Acadêmica</h1>
 
-      <div className="flex flex-wrap gap-4">
-        <Select value={institutionFilter} onValueChange={setInstitutionFilter}>
-          <SelectTrigger className="w-[280px]">
-            <SelectValue placeholder="Instituição" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Todas">Todas as Instituições</SelectItem>
-            {institutions
-              .slice()
-              .sort((a, b) => a.localeCompare(b))
-              .map((inst) => (
-                <SelectItem key={inst} value={inst}>
-                  {inst}
-                </SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
+    <div className="flex flex-wrap gap-4">
+      <Select value={institutionFilter} onValueChange={handleInstitutionFilterChange}>
+        <SelectTrigger className="w-[280px]">
+          <SelectValue placeholder="Instituição" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="Todas">Todas as Instituições</SelectItem>
+          {[...new Set(institutions)]
+            .sort((a, b) => a.localeCompare(b))
+            .map((inst) => (
+              <SelectItem key={inst} value={inst}>
+                {inst}
+              </SelectItem>
+            ))}
+        </SelectContent>
+      </Select>
+      <Select value={labelFilter} onValueChange={handleLabelFilterChange}>
+        <SelectTrigger className="w-[280px]">
+          <SelectValue placeholder="Label" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="Todos">Todos os Pesquisadores</SelectItem>
+          {[...new Set(graphData.filter((el) => el.group === "nodes").map((node) => node.data.label))]
+            .sort((a, b) => a.localeCompare(b))
+            .map((label) => (
+              <SelectItem key={label} value={label}>
+                {label}
+              </SelectItem>
+            ))}
+        </SelectContent>
+      </Select>
+      <button
+        onClick={() => {
+          setSelectedPesquisador(null);
+          fetchGraphData();
+        }}
+        className="bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600 ml-auto"
+      >
+        Recarregar grafo
+      </button>
+    </div>
 
-        <button
-          onClick={() => {
-            setSelectedPesquisador(null)
-            fetchGraphData()
-          }}
-          className="bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600 ml-auto"
-        >
-          Recarregar grafo
-        </button>
-      </div>
-
-      <div className="border border-gray-300 rounded-lg relative" style={{ height: "600px" }}>
+    <div className="flex">
+      {/* Área do grafo */}
+      <div className={`flex-1 border border-gray-300 rounded-lg relative ${selectedNode ? "mr-4" : ""}`} style={{ height: "600px" }}>
         <button onClick={toggleFullscreen} className="absolute top-2 right-2 bg-white p-2 rounded-full shadow-md z-10">
           {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
         </button>
         <CytoscapeComponent
-        elements={cytoscapeElements}
-        stylesheet={stylesheet}
-        style={{ width: "100%", height: "100%" }}
-        minZoom={0.1}
-        maxZoom={3}
-        wheelSensitivity={0.2}
-        cy={(cy) => {
-          cyRef.current = cy
+          elements={cytoscapeElements}
+          stylesheet={stylesheet}
+          style={{ width: "100%", height: "100%" }}
+          minZoom={0.1}
+          maxZoom={3}
+          wheelSensitivity={0.2}
+          cy={(cy) => {
+            cyRef.current = cy;
 
-          const layout = cy.layout(elkLayout)
-          layout.run()
+            const layout = cy.layout({
+              name: "elk",
+              elk: {
+                algorithm: "mrtree",
+                direction: "DOWN",
+                spacing: 50,
+                "nodePlacement.strategy": "NETWORK_SIMPLEX",
+                "separateConnectedComponents": true,
+                "componentSpacing": 600,
+                "edgeSpacingFactor": 30,
+              },
+              fit: true,
+              animate: false,
+            });
+            layout.run();
 
-          cy.on("tap", "node", (evt) => {
-            const node = evt.target
-            setSelectedNode(node.data())
+            cy.on("tap", "node", (evt) => {
+              const node = evt.target;
+              setSelectedNode(node.data());
+            
+              // Apenas seleciona o nó sem alterar o zoom ou o layout
+              cy.elements().unselect();
+              node.select();
+            });
 
-            cy.elements().unselect()
-
-            node.select()
-          })
-
-          cy.on("tap", (evt) => {
-            if (evt.target === cy) {
-              cy.elements().unselect()
-              setSelectedNode(null)
-            }
-          })
-        }}
-      />
+            cy.on("tap", (evt) => {
+              if (evt.target === cy) {
+                cy.elements().unselect();
+                setSelectedNode(null);
+              }
+            });
+          }}
+        />
       </div>
+
+ {/* Retângulo para exibir as propriedades do nó */}
+{selectedNode && (
+  <div className="p-4 border border-gray-300 rounded-lg" style={{ minWidth: "400px", maxWidth: "600px" }}>
+    <h2 className="text-xl font-bold mb-4">Informações do Pesquisador</h2>
+    <div className="space-y-2">
+      {Object.entries(selectedNode)
+        .filter(([key]) => key !== "relevancia" && key !== "indicador_semente") // Filtra para não exibir a propriedade relevancia
+        .map(([key, value]) => (
+          <div key={key} className="flex">
+            <span className="font-medium w-1/3">{keyMapping[key] || key}:</span>
+            <span className="w-2/3">{String(value)}</span>
+          </div>
+        ))}
     </div>
+  </div>
+)}
+    </div>
+  </div>
   )
 }
