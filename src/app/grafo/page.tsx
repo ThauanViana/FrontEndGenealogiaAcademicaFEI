@@ -73,14 +73,11 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
       setGraphData(elementsWithFirstName);
       setCytoscapeElements(elementsWithFirstName);
       setInstitutions(data.metadata.institutions);
-
-      
       setOriginalInstitutions(data.metadata.institutions);
-setOriginalLabels(data.elements.filter((el) => el.group === "nodes").map((node) => node.data.label));
-setLabels(originalLabels);
-setLoading(false);
-  
-      console.log("Dados recebidos:", elementsWithFirstName);
+      setOriginalLabels(data.elements.filter((el) => el.group === "nodes").map((node) => node.data.label));
+      setLabels(data.elements.filter((el) => el.group === "nodes").map((node) => node.data.label));
+      setLoading(false);
+      console.log("Dados do grafo:", institutions);
     } catch (err) {
       console.error("Erro ao buscar dados:", err);
       setError(err instanceof Error ? err.message : "Erro desconhecido");
