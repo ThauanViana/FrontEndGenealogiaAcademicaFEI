@@ -118,22 +118,45 @@ export async function GET(request: Request) {
         `);    
       }
 
-    const data = result.records[0].get("result");
+      const data = result.records[0].get("result");
 
-    const convertedData = {
-      elements: data.elements.map((element: any) => ({
-        ...element,
-        data: {
-          ...element.data,
-          relevancia: element.data.relevancia?.toNumber?.() || element.data.relevancia, // Converter relevância, se for Integer
+      const convertedData = {
+        elements: data.elements.map((element: any) => {
+          // Calcula a quantidade de filhos e netos para cada nó
+          if (element.group === "nodes") {
+            const nodeId = element.data.id;
+      
+            // Filhos: nós diretamente conectados como "target" do nó atual
+            const filhos = data.elements.filter(
+              (el: any) => el.group === "edges" && el.data.source === nodeId
+            );
+      
+            // Netos: nós conectados como "target" dos filhos
+            const netos = filhos.flatMap((filho: any) =>
+              data.elements.filter(
+                (el: any) => el.group === "edges" && el.data.source === filho.data.target
+              )
+            );
+      
+            return {
+              ...element,
+              data: {
+                ...element.data,
+                relevancia: element.data.relevancia?.toNumber?.() || element.data.relevancia, // Converter relevância, se for Integer
+                quantidadeDeFilhos: filhos.length, // Adiciona a quantidade de filhos
+                quantidadeDeNetos: netos.length, // Adiciona a quantidade de netos
+              },
+            };
+          }
+      
+          return element;
+        }),
+        metadata: {
+          institutions: data.metadata.institutions || [], // Provide default empty array if undefined
+          areas: data.metadata.areas || [], // Provide default empty array if undefined
+          nodeCount: data.metadata.nodeCount?.toNumber?.() || data.metadata.nodeCount || 0, // Converter nodeCount, se for Integer
         },
-      })),
-      metadata: {
-        institutions: data.metadata.institutions || [], // Provide default empty array if undefined
-        areas: data.metadata.areas || [], // Provide default empty array if undefined
-        nodeCount: data.metadata.nodeCount?.toNumber?.() || data.metadata.nodeCount || 0, // Converter nodeCount, se for Integer
-      },
-    };
+      };
     await session.close();
     await driver.close();
 

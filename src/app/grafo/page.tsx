@@ -7,6 +7,7 @@ import { Loader2, Maximize, Minimize } from "lucide-react";
 import type { Core } from "cytoscape";
 import cytoscape from "cytoscape";
 import elk from "cytoscape-elk";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { set } from "date-fns";
 
 cytoscape.use(elk);
@@ -77,7 +78,7 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
       setOriginalLabels(data.elements.filter((el) => el.group === "nodes").map((node) => node.data.label));
       setLabels(data.elements.filter((el) => el.group === "nodes").map((node) => node.data.label));
       setLoading(false);
-      console.log("Dados do grafo:", institutions);
+      console.log("Dados do grafo:", data);
     } catch (err) {
       console.error("Erro ao buscar dados:", err);
       setError(err instanceof Error ? err.message : "Erro desconhecido");
@@ -437,7 +438,9 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
     label: "Nome",
     instituicaoCorrespondente: "Instituição",
     id: "Id Lattes",
-    areaDoutorado: "Área Doutorado"
+    areaDoutorado: "Área Doutorado",
+    quantidadeDeFilhos: "Quantidade de Filhos Acadêmicos",
+    quantidadeDeNetos: "Quantidade de Netos Acadêmicos",
   };
   return (
     
@@ -541,22 +544,60 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
         />
       </div>
 
- {/* Retângulo para exibir as propriedades do nó */}
-{selectedNode && (
-  <div className="p-4 border border-gray-300 rounded-lg" style={{ minWidth: "400px", maxWidth: "600px" }}>
-    <h2 className="text-xl font-bold mb-4">Informações do Pesquisador</h2>
-    <div className="space-y-2">
-      {Object.entries(selectedNode)
-        .filter(([key]) => key !== "relevancia" && key !== "indicador_semente") // Filtra para não exibir a propriedade relevancia
-        .map(([key, value]) => (
-          <div key={key} className="flex">
-            <span className="font-medium w-1/3">{keyMapping[key] || key}:</span>
-            <span className="w-2/3">{String(value)}</span>
+
+{/* Retângulo para exibir as propriedades do nó */}
+<div style={{ maxWidth: "400px", minWidth: "300px" }}>
+  {selectedNode ? (
+    <Card>
+      <CardHeader>
+        <CardTitle>{selectedNode.label}</CardTitle>
+        <CardDescription>Detalhes do pesquisador</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+        <div>
+            <p className="text-sm font-medium">Instituição Correspondente</p>
+            <p className="text-2xl">{selectedNode.instituicaoCorrespondente || "Não especificado"}</p>
           </div>
-        ))}
-    </div>
-  </div>
-)}
+          <div>
+            <p className="text-sm font-medium">Área de Doutorado</p>
+            <p className="text-2xl">{selectedNode.areaDoutorado || "Não especificado"}</p>
+          </div>
+          <div>
+            <p className="text-sm font-medium">Quantidade de Filhos Acadêmicos</p>
+            <p className="text-2xl">{selectedNode.quantidadeDeFilhos || 0}</p>
+          </div>
+          <div>
+            <p className="text-sm font-medium">Quantidade de Netos Acadêmicos</p>
+            <p className="text-2xl">{selectedNode.quantidadeDeNetos || 0}</p>
+          </div>
+          
+          <div>
+            <p className="text-sm font-medium">ID Lattes</p>
+            <p className="text-2xl">{selectedNode.id || "Não especificado"}</p>
+          </div>
+          
+        </div>
+      </CardContent>
+    </Card>
+  ) : (
+    <Card>
+      <CardHeader>
+        <CardTitle>Informações</CardTitle>
+        <CardDescription>Selecione um pesquisador para ver detalhes</CardDescription>
+      </CardHeader>
+      <CardContent>
+  <p>Clique em um nó no grafo para visualizar informações como:</p>
+  <ul className="mt-4 space-y-2 list-disc list-inside">
+    <li>Instituição do pesquisador</li>
+    <li>Quantidade de filhos acadêmicos</li>
+    <li>Quantidade de netos acadêmicos</li>
+    <li>ID Lattes</li>
+  </ul>
+</CardContent>
+    </Card>
+  )}
+</div>
     </div>
   </div>
   )
