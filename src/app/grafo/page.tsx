@@ -7,6 +7,7 @@ import { Loader2, Maximize, Minimize } from "lucide-react";
 import type { Core } from "cytoscape";
 import cytoscape from "cytoscape";
 import elk from "cytoscape-elk";
+import { set } from "date-fns";
 
 cytoscape.use(elk);
 
@@ -19,54 +20,67 @@ export default function Grafo() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [institutions, setInstitutions] = useState<string[]>([]);
+  const [labels, setLabels] = useState<string[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [filteredResearcherId, setFilteredResearcherId] = useState<string | null>(null);
+  const [filteredInstitutionId, setFilteredInstitutionId] = useState<string | null>(null);
   //const [selectedNode, setSelectedNode] = useState(null);
   const cyRef = useRef<Core | null>(null);
   const [selectedNode, setSelectedNode] = useState<any>(null);
+  const [isLayoutApplied, setIsLayoutApplied] = useState(false);
+  const [shouldReapplyLayout, setShouldReapplyLayout] = useState(false);
+  const [filteredTreeNodeIds, setFilteredTreeNodeIds] = useState<Set<string>>(new Set());
+  const [originalInstitutions, setOriginalInstitutions] = useState<string[]>([]);
+const [originalLabels, setOriginalLabels] = useState<string[]>([]);
+const [selectedInstitution, setSelectedInstitution] = useState<string | null>(null);
+const [selectedResearcher, setSelectedResearcher] = useState<string | null>(null);
+const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | null>(null);
 
   const fetchGraphData = useCallback(async (pesquisadorId?: string) => {
     try {
       setLoading(true);
-
+  
       let endpoint = "/api/graph-data";
       if (pesquisadorId) {
         endpoint = `/api/graph-data?pesquisadorId=${encodeURIComponent(pesquisadorId)}`;
       }
-
+  
       const response = await fetch(endpoint);
       if (!response.ok) {
         throw new Error("Falha ao buscar dados do grafo.");
       }
-
+  
       const data = await response.json();
       if (data.error) {
         throw new Error(data.error);
       }
-
-      // Adiciona a propriedade "iniciais" aos nós
-      const elementsWithInitials = data.elements.map((el) => {
+  
+      // Adiciona a propriedade "primeiroNome" aos nós
+      const elementsWithFirstName = data.elements.map((el) => {
         if (el.group === "nodes" && el.data.label) {
-          const initials = el.data.label
-            .split(" ")
-            .map((word) => word[0].toUpperCase() + ".")
-            .join(" ");
+          const firstName = el.data.label.split(" ")[0]; // Extrai apenas o primeiro nome
           return {
             ...el,
             data: {
               ...el.data,
-              iniciais: initials, // Adiciona a propriedade iniciais
+              primeiroNome: firstName, // Adiciona a propriedade primeiroNome
             },
           };
         }
         return el;
       });
-
-      setGraphData(elementsWithInitials);
-      setCytoscapeElements(elementsWithInitials);
+  
+      setGraphData(elementsWithFirstName);
+      setCytoscapeElements(elementsWithFirstName);
       setInstitutions(data.metadata.institutions);
-      setLoading(false);
 
-      console.log("Dados recebidos:", elementsWithInitials);
+      
+      setOriginalInstitutions(data.metadata.institutions);
+setOriginalLabels(data.elements.filter((el) => el.group === "nodes").map((node) => node.data.label));
+setLabels(originalLabels);
+setLoading(false);
+  
+      console.log("Dados recebidos:", elementsWithFirstName);
     } catch (err) {
       console.error("Erro ao buscar dados:", err);
       setError(err instanceof Error ? err.message : "Erro desconhecido");
@@ -78,84 +92,130 @@ export default function Grafo() {
     fetchGraphData();
   }, [fetchGraphData]);
 
+ 
+  const buildTreeRecursively = (nodeId: string, visitedNodes: Set<string>, nodeIdsToInclude: Set<string>) => {
+    graphData.forEach((el) => {
+      if (el.group === "edges" && (el.data.source === nodeId || el.data.target === nodeId)) {
+        const connectedNodeId = el.data.source === nodeId ? el.data.target : el.data.source;
+  
+        if (!visitedNodes.has(connectedNodeId)) {
+          visitedNodes.add(connectedNodeId);
+          nodeIdsToInclude.add(connectedNodeId);
+          buildTreeRecursively(connectedNodeId, visitedNodes, nodeIdsToInclude); // Chamada recursiva
+        }
+      }
+    });
+  };
+
   useEffect(() => {
-    if (cyRef.current) {
+    if (cyRef.current && shouldReapplyLayout) {
       const cy = cyRef.current;
-      const currentZoom = cy.zoom();
-    const currentPan = cy.pan();
+  
       // Remove todos os elementos existentes
       cy.elements().remove();
-
+  
       // Adiciona os novos elementos filtrados
       cy.add(cytoscapeElements);
-
-      // Reaplica o layout
+  
+      // Configura e aplica o layout
       const layout = cy.layout({
         name: "elk",
         elk: {
-          algorithm: "mrtree",
-          direction: "DOWN",
-          spacing: 50,
-          "nodePlacement.strategy": "NETWORK_SIMPLEX",
-          "separateConnectedComponents": true,
-          "componentSpacing": 600,
-          "edgeSpacingFactor": 30,
+          algorithm: "layered", // ou "mrtree", mas "layered" costuma separar melhor
+          "elk.spacing.nodeNode": 100, // Espaçamento entre nós
+          "elk.layered.spacing.nodeNodeBetweenLayers": 125, // Espaço vertical entre camadas
+          "elk.layered.spacing.edgeNodeBetweenLayers": 100, // Espaço de arestas
+          "elk.spacing.edgeEdge": 50, // Espaço entre arestas
+          "elk.spacing.componentComponent": 100, // Espaço entre componentes desconectados
+          "elk.direction": "DOWN", // Direção do layout
+          "elk.layered.nodePlacement.bk.fixedAlignment": "BALANCED", // Deixa a árvore mais equilibrada
         },
         fit: true,
         animate: false,
       });
+      
+  
+      console.log("Reaplicando layout com configurações:", layout.options.elk);
+  
       layout.run();
-
+  
       // Ajusta o zoom para caber no grafo
-      // Restaura o estado de zoom e pan
-    cy.zoom(currentZoom);
-    cy.pan(currentPan);
+      cy.fit();
+  
+      // Marque que o layout foi reaplicado
+      setShouldReapplyLayout(false);
     }
-  }, [cytoscapeElements]);
-
+  }, [cytoscapeElements, shouldReapplyLayout]);
   const handleInstitutionFilterChange = (value: string) => {
     setInstitutionFilter(value);
-
+  
     if (value === "Todas") {
-      setCytoscapeElements(graphData); // Mostra todos os elementos
+      // Retorna ao estado inicial
+      setSelectedInstitution(null);
+      setSelectedResearcher(null);
+      setCytoscapeElements(graphData);
+      setLabels(originalLabels); // Mostra todos os pesquisadores
+      setInstitutions(originalInstitutions); // Mostra todas as instituições
     } else {
+      setSelectedInstitution(value);
+  setFilteredInstitutionId(value);
       // Filtra os nós que pertencem à instituição selecionada
       const filteredNodes = graphData.filter(
         (el) =>
           el.group === "nodes" &&
-          (el.data.instituicaoCorrespondente === value || el.data.indicador_semente === "true")
+          el.data.instituicaoCorrespondente === value
       );
-
+  
       // Cria um conjunto com os IDs dos nós filtrados
       const filteredNodeIds = new Set(filteredNodes.map((node) => node.data.id));
-
-      // Filtra as arestas que conectam os nós filtrados
-      const filteredEdges = graphData.filter(
+  
+      // Constrói a árvore recursivamente
+      const visitedNodes = new Set(filteredNodeIds);
+      filteredNodeIds.forEach((nodeId) => {
+        buildTreeRecursively(nodeId, visitedNodes, filteredNodeIds);
+      });
+  
+      // Filtra os nós finais com base nos IDs coletados
+      const finalFilteredNodes = graphData.filter(
+        (el) => el.group === "nodes" && filteredNodeIds.has(el.data.id)
+      );
+  
+      // Filtra as arestas que conectam os nós finais
+      const finalFilteredEdges = graphData.filter(
         (el) =>
           el.group === "edges" &&
           filteredNodeIds.has(el.data.source) &&
           filteredNodeIds.has(el.data.target)
       );
-
+  
       // Atualiza os elementos do grafo com os nós e arestas filtrados
-      setCytoscapeElements([...filteredNodes, ...filteredEdges]);
+      setCytoscapeElements([...finalFilteredNodes, ...finalFilteredEdges]);
     }
+  
+    setShouldReapplyLayout(true);
   };
-
+  
   const handleLabelFilterChange = (value: string) => {
     setLabelFilter(value);
-
+  
     if (value === "Todos") {
-      setCytoscapeElements(graphData); // Mostra todos os elementos
+      // Retorna ao estado inicial
+      setSelectedResearcher(null);
+      setSelectedInstitution(null);
+      setCytoscapeElements(graphData);
+      setLabels(originalLabels); // Mostra todos os pesquisadores
+      setInstitutions(originalInstitutions); // Mostra todas as instituições
     } else {
+      setSelectedResearcher(value);
+      
       // Filtra os nós que possuem o label selecionado
       const filteredNodes = graphData.filter(
         (el) => el.group === "nodes" && el.data.label === value
       );
-
+  
       // Cria um conjunto com os IDs dos nós filtrados
       const filteredNodeIds = new Set(filteredNodes.map((node) => node.data.id));
-
+      setFilteredResearcherId(filteredNodes[0]?.data.id || null);
       // Adiciona recursivamente os nós conectados
       const addConnectedNodes = (nodeId: string) => {
         graphData.forEach((el) => {
@@ -168,15 +228,15 @@ export default function Grafo() {
           }
         });
       };
-
+  
       // Inicia a busca recursiva para cada nó filtrado
       filteredNodes.forEach((node) => addConnectedNodes(node.data.id));
-
+  
       // Filtra os nós finais com base nos IDs coletados
       const finalFilteredNodes = graphData.filter(
         (el) => el.group === "nodes" && filteredNodeIds.has(el.data.id)
       );
-
+  
       // Filtra as arestas que conectam os nós finais
       const filteredEdges = graphData.filter(
         (el) =>
@@ -184,20 +244,20 @@ export default function Grafo() {
           filteredNodeIds.has(el.data.source) &&
           filteredNodeIds.has(el.data.target)
       );
-
+  
       // Atualiza os elementos do grafo com os nós e arestas filtrados
       setCytoscapeElements([...finalFilteredNodes, ...filteredEdges]);
     }
+  
+    setShouldReapplyLayout(true);
   };
-
-
   
   const stylesheet = [
     {
       selector: "node",
       style: {
         "background-color": "#6495ED",
-        label: "data(iniciais)", // Exibe as iniciais no lugar do label
+        label: "data(primeiroNome)", // Exibe apenas o primeiro nome
         width: "mapData(relevancia, 0, 50, 20, 40)", // Mapeia largura com base em relevancia
         height: "mapData(relevancia, 0, 50, 20, 40)", // Mapeia altura com base em relevancia
         "font-size": 12,
@@ -209,6 +269,8 @@ export default function Grafo() {
         color: "#000000",
       },
     },
+    
+    
     {
       selector: "node[!relevancia]", // Nós sem relevancia
       style: {
@@ -220,6 +282,36 @@ export default function Grafo() {
       selector: "node[indicador_semente = 'true']", // Nós marcados como sementes
       style: {
         "background-color": "#FFD700", // Cor amarela para as sementes
+      },
+    },
+    {
+      selector: "node.filtered", // Estilo para os nós filtrados
+      style: {
+        "background-color": "#FFA500", // Cor laranja
+        "border-width": 3,
+        "border-color": "red", // Adiciona uma borda vermelha para depuração
+      },
+    },
+    
+    
+    {
+      selector: `node[instituicaoCorrespondente = '${filteredInstitutionId}']`, // Estilo dinâmico para a instituição filtrada
+      style: {
+        "background-color": "#eb3434", // Cor amarela
+        
+      },
+    },
+    {
+      selector: `node[id = '${filteredResearcherId}']`, // Estilo dinâmico para o pesquisador filtrado
+      style: {
+        "background-color": "#FFA500", // Cor laranja
+    
+      },
+    },
+    {
+      selector: "node.selected", // Estilo para o nó selecionado
+      style: {
+        "background-color": "#800080", // Cor roxa
       },
     },
     {
@@ -289,7 +381,7 @@ export default function Grafo() {
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="Todos">Todos os Pesquisadores</SelectItem>
-          {[...new Set(graphData.filter((el) => el.group === "nodes").map((node) => node.data.label))]
+          {[...new Set(labels)]
             .sort((a, b) => a.localeCompare(b))
             .map((label) => (
               <SelectItem key={label} value={label}>
@@ -325,36 +417,39 @@ export default function Grafo() {
           cy={(cy) => {
             cyRef.current = cy;
 
-            const layout = cy.layout({
-              name: "elk",
-              elk: {
-                algorithm: "mrtree",
-                direction: "DOWN",
-                spacing: 50,
-                "nodePlacement.strategy": "NETWORK_SIMPLEX",
-                "separateConnectedComponents": true,
-                "componentSpacing": 600,
-                "edgeSpacingFactor": 30,
-              },
-              fit: true,
-              animate: false,
-            });
-            layout.run();
+            if (!isLayoutApplied) {
+              const layout = cy.layout({
+                name: "elk",
+                elk: {
+                  algorithm: "layered", // ou "mrtree", mas "layered" costuma separar melhor
+                  "elk.spacing.nodeNode": 100, // Espaçamento entre nós
+                  "elk.layered.spacing.nodeNodeBetweenLayers": 125, // Espaço vertical entre camadas
+                  "elk.layered.spacing.edgeNodeBetweenLayers": 100, // Espaço de arestas
+                  "elk.spacing.edgeEdge": 50, // Espaço entre arestas
+                  "elk.spacing.componentComponent": 100, // Espaço entre componentes desconectados
+                  "elk.direction": "DOWN", // Direção do layout
+                  "elk.layered.nodePlacement.bk.fixedAlignment": "BALANCED", // Deixa a árvore mais equilibrada
+                },
+                fit: true,
+                animate: false,
+              });
+              
+          
+              layout.run();
+              setIsLayoutApplied(true); // Marca o layout como aplicado
+            }
 
             cy.on("tap", "node", (evt) => {
               const node = evt.target;
-              setSelectedNode(node.data());
             
-              // Apenas seleciona o nó sem alterar o zoom ou o layout
-              cy.elements().unselect();
-              node.select();
-            });
-
-            cy.on("tap", (evt) => {
-              if (evt.target === cy) {
-                cy.elements().unselect();
-                setSelectedNode(null);
-              }
+              // Remove a classe 'selected' de todos os nós
+              cy.elements("node").removeClass("selected");
+            
+              // Adiciona a classe 'selected' ao nó clicado
+              node.addClass("selected");
+            
+              // Atualiza o estado do nó selecionado
+              setSelectedNode(node.data());
             });
           }}
         />

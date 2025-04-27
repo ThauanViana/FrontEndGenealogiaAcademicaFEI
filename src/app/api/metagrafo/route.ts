@@ -1,65 +1,78 @@
-import { NextResponse } from "next/server"
-import neo4j from "neo4j-driver"
+import { NextResponse } from "next/server";
+import neo4j from "neo4j-driver";
 
 //export const dynamic = "force-dynamic";
 
-
 export async function GET() {
-  const uri = process.env.NEO4J_URI
-  const user = process.env.NEO4J_USER
-  const password = process.env.NEO4J_PASSWORD
+  const uri = process.env.NEO4J_URI;
+  const user = process.env.NEO4J_USER;
+  const password = process.env.NEO4J_PASSWORD;
 
-  const driver = neo4j.driver(uri, neo4j.auth.basic(user, password))
+  const driver = neo4j.driver(uri, neo4j.auth.basic(user, password));
 
   try {
-    let session = driver.session()
+    let session = driver.session();
     const result = await session.run(`
       MATCH (orientador:Pesquisador)-[:ORIENTOU]->(orientado:Pesquisador)
       WHERE orientador.instituicaoCorrespondente IS NOT NULL AND orientado.instituicaoCorrespondente IS NOT NULL
       WITH orientador.instituicaoCorrespondente AS sourceInst, orientado.instituicaoCorrespondente AS targetInst, count(*) AS weight
       RETURN sourceInst, targetInst, weight
       ORDER BY weight DESC
-    `)
+    `);
 
-    await session.close()
-    const institutionsMap = new Map()
+    await session.close();
+
+    const institutionsMap = new Map();
+    const conexao_instituicao = new Map(); // Dicionário para conexões entre instituições
 
     result.records.forEach((record) => {
-      const sourceInst = record.get("sourceInst")
-      const targetInst = record.get("targetInst")
-      const weight = record.get("weight").toNumber()
+      const sourceInst = record.get("sourceInst");
+      const targetInst = record.get("targetInst");
+      const weight = record.get("weight").toNumber();
 
+      // Inicializa o dicionário para a instituição de origem, se necessário
+      if (!conexao_instituicao.has(sourceInst)) {
+        conexao_instituicao.set(sourceInst, {});
+      }
+
+      // Adiciona ou atualiza a quantidade de outgoing para a instituição de destino
+      const sourceConnections = conexao_instituicao.get(sourceInst);
+      sourceConnections[targetInst] = (sourceConnections[targetInst] || 0) + weight;
+
+      // Inicializa o institutionsMap, se necessário
       if (!institutionsMap.has(sourceInst)) {
-        institutionsMap.set(sourceInst, { count: 0, outgoing: 0, incoming: 0 })
+        institutionsMap.set(sourceInst, { count: 0, outgoing: 0, incoming: 0 });
       }
       if (!institutionsMap.has(targetInst)) {
-        institutionsMap.set(targetInst, { count: 0, outgoing: 0, incoming: 0 })
+        institutionsMap.set(targetInst, { count: 0, outgoing: 0, incoming: 0 });
       }
 
-      institutionsMap.get(sourceInst).outgoing += weight
-      institutionsMap.get(targetInst).incoming += weight
-    })
+      // Atualiza os valores de outgoing e incoming
+      institutionsMap.get(sourceInst).outgoing += weight;
+      institutionsMap.get(targetInst).incoming += weight;
+    });
 
-    session = driver.session()
+    session = driver.session();
     const countResult = await session.run(`
       MATCH (p:Pesquisador)
       WHERE p.instituicaoCorrespondente IS NOT NULL
       RETURN p.instituicaoCorrespondente AS institution, count(*) AS count
-    `)
+    `);
 
-    await session.close()
+    await session.close();
 
     countResult.records.forEach((record) => {
-      const institution = record.get("institution")
-      const count = record.get("count").toNumber()
+      const institution = record.get("institution");
+      const count = record.get("count").toNumber();
 
       if (institutionsMap.has(institution)) {
-        institutionsMap.get(institution).count = count
+        institutionsMap.get(institution).count = count;
       } else {
-        institutionsMap.set(institution, { count, outgoing: 0, incoming: 0 })
+        institutionsMap.set(institution, { count, outgoing: 0, incoming: 0 });
       }
-    })
+    });
 
+    // Cria os nós e inclui o dicionário de conexões
     const nodes = Array.from(institutionsMap.entries()).map(([name, data]) => ({
       data: {
         id: name,
@@ -67,8 +80,9 @@ export async function GET() {
         size: data.count,
         outgoing: data.outgoing,
         incoming: data.incoming,
+        conexao_instituicao: conexao_instituicao.get(name) || {}, // Inclui o dicionário de conexões
       },
-    }))
+    }));
 
     const edges = result.records.map((record, index) => ({
       data: {
@@ -77,21 +91,20 @@ export async function GET() {
         target: record.get("targetInst"),
         weight: record.get("weight").toNumber(),
       },
-    }))
+    }));
 
-    await driver.close()
+    await driver.close();
 
-    return NextResponse.json({ nodes, edges })
+    return NextResponse.json({ nodes, edges });
   } catch (error) {
-    console.error("Error fetching institution graph data:", error)
+    console.error("Error fetching institution graph data:", error);
 
     try {
-      await driver.close()
+      await driver.close();
     } catch (closeError) {
-      console.error("Error closing driver:", closeError)
+      console.error("Error closing driver:", closeError);
     }
 
-    return NextResponse.json({ error: "Falha ao buscar dados do metagrafo" }, { status: 500 })
+    return NextResponse.json({ error: "Falha ao buscar dados do metagrafo" }, { status: 500 });
   }
 }
-

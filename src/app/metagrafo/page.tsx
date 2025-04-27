@@ -66,8 +66,13 @@
          data: {
            ...node.data,
            connections: connectionCounts.get(node.data.id) || 0,
+           size: connectionCounts.get(node.data.id) || 0,
+           size_arrow: node.data.outgoing || 0,
+           weight: node.data.conexao_instituicao || 0,
          },
        }))
+       
+       console.log(nodesWithConnections);
  
        setElements([...nodesWithConnections, ...data.edges])
        setFilteredElements([...nodesWithConnections, ...data.edges])
@@ -80,51 +85,54 @@
    }, [])
  
    const applyFilters = useCallback(() => {
-     if (elements.length === 0) return;
-   
-     if (institutionFilter === "Todas") {
-       setFilteredElements(elements);
-       if (cyRef.current) {
-         cyRef.current.elements().remove(); 
-         cyRef.current.add(elements); 
-         const layoutInstance = cyRef.current.layout(layout);
-         layoutInstance.run(); 
-         cyRef.current.resize();
-         cyRef.current.fit();
-       }
-       return;
-     }
-   
-     const nodes = elements.filter((el) => !el.data.source && !el.data.target);
-     const edges = elements.filter((el) => el.data.source && el.data.target);
-   
-     const filteredEdges = edges.filter(
-       (edge) => edge.data.source === institutionFilter || edge.data.target === institutionFilter
-     );
-   
-     const nodeIdsToKeep = new Set();
-     nodeIdsToKeep.add(institutionFilter);
-   
-     filteredEdges.forEach((edge) => {
-       nodeIdsToKeep.add(edge.data.source);
-       nodeIdsToKeep.add(edge.data.target);
-     });
-   
-     const filteredNodes = nodes.filter((node) => nodeIdsToKeep.has(node.data.id));
-   
-     const newFilteredElements = [...filteredNodes, ...filteredEdges];
-     setFilteredElements(newFilteredElements);
-   
-     
-     if (cyRef.current) {
-       cyRef.current.elements().remove(); 
-       cyRef.current.add(newFilteredElements); 
-       const layoutInstance = cyRef.current.layout(layout);
-       layoutInstance.run(); 
-       cyRef.current.resize();
-       cyRef.current.fit();
-     }
-   }, [elements, institutionFilter, layout]);
+    if (elements.length === 0) return;
+  
+    if (institutionFilter === "Todas") {
+      setFilteredElements(elements);
+      if (cyRef.current) {
+        cyRef.current.elements().remove();
+        cyRef.current.add(elements);
+        const layoutInstance = cyRef.current.layout(layout);
+        layoutInstance.run();
+  
+        // Reset do zoom ao trocar para "Todas as Instituições"
+        cyRef.current.resize();
+        cyRef.current.fit();
+      }
+      return;
+    }
+  
+    const nodes = elements.filter((el) => !el.data.source && !el.data.target);
+    const edges = elements.filter((el) => el.data.source && el.data.target);
+  
+    const filteredEdges = edges.filter(
+      (edge) => edge.data.source === institutionFilter || edge.data.target === institutionFilter
+    );
+  
+    const nodeIdsToKeep = new Set();
+    nodeIdsToKeep.add(institutionFilter);
+  
+    filteredEdges.forEach((edge) => {
+      nodeIdsToKeep.add(edge.data.source);
+      nodeIdsToKeep.add(edge.data.target);
+    });
+  
+    const filteredNodes = nodes.filter((node) => nodeIdsToKeep.has(node.data.id));
+  
+    const newFilteredElements = [...filteredNodes, ...filteredEdges];
+    setFilteredElements(newFilteredElements);
+  
+    if (cyRef.current) {
+      cyRef.current.elements().remove();
+      cyRef.current.add(newFilteredElements);
+      const layoutInstance = cyRef.current.layout(layout);
+      layoutInstance.run();
+  
+      // Reset do zoom ao trocar o filtro de instituição
+      cyRef.current.resize();
+      cyRef.current.fit();
+    }
+  }, [elements, institutionFilter, layout]);
    useEffect(() => {
      fetchGraphData()
    }, [fetchGraphData])
@@ -141,8 +149,8 @@
        style: {
          "background-color": "#6495ED",
          label: "data(label)",
-         width: "mapData(size, 1, 100, 20, 60)",
-         height: "mapData(size, 1, 100, 20, 60)",
+         width: "mapData(size, 1, 100, 10, 100)",
+         height: "mapData(size, 1, 100, 10, 100)",
          "font-size": 12,
          "text-valign": "bottom",
          "text-halign": "center",
@@ -169,7 +177,7 @@
      {
        selector: "edge",
        style: {
-         width: "mapData(weight, 1, 10, 1, 8)",
+         width: "mapData(weight, 1, 13, 1, 13)",
          "line-color": "#ccc",
          "target-arrow-color": "#ccc",
          "target-arrow-shape": "triangle",
@@ -233,28 +241,28 @@
    }
  
    const initializeCytoscape = useCallback(
-     (cy: Core) => {
-       cyRef.current = cy
-       cy.removeListener("tap")
-       cy.on("tap", "node", handleNodeClick)
-       cy.on("tap", (event) => {
-         if (event.target === cy) {
-           setSelectedInstitution(null)
-         }
-       })
-   
-       if (!layoutExecuted) {
-         const layoutInstance = cy.layout(layout)
-         layoutInstance.run()
-         setLayoutExecuted(true)
-       }
-   
-       
-       cy.resize()
-       cy.fit()
-     },
-     [handleNodeClick, layoutExecuted, layout],
-   )
+    (cy: Core) => {
+      cyRef.current = cy;
+      cy.removeListener("tap");
+      cy.on("tap", "node", handleNodeClick);
+      cy.on("tap", (event) => {
+        if (event.target === cy) {
+          setSelectedInstitution(null);
+        }
+      });
+  
+      if (!layoutExecuted) {
+        const layoutInstance = cy.layout(layout);
+        layoutInstance.run();
+        setLayoutExecuted(true);
+  
+        // Reset do zoom apenas na inicialização
+        cy.resize();
+        cy.fit();
+      }
+    },
+    [handleNodeClick, layoutExecuted, layout]
+  );
  
    if (loading) {
      return (
