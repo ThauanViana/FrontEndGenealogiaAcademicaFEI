@@ -7,6 +7,8 @@
  import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
  import type { Core, NodeSingular } from "cytoscape"
  import { useMemo } from "react"
+
+import { Tooltip } from "@/components/ui/tooltip";
  
  import fcose from "cytoscape-fcose"
  import cytoscape from "cytoscape"
@@ -22,8 +24,12 @@
    const [institutions, setInstitutions] = useState<string[]>([])
    const cyRef = useRef<Core | null>(null)
    const [layoutExecuted, setLayoutExecuted] = useState(false)
- 
- 
+   const [fullscreenInitialized, setFullscreenInitialized] = useState(false);
+   const [showPopup, setShowPopup] = useState(false);
+   const [nodePositions, setNodePositions] = useState<Map<string, { x: number; y: number }>>(new Map());
+   const handlePopupToggle = () => {
+     setShowPopup(!showPopup);
+   };
    const layout = useMemo(() => ({
      name: "fcose",
      quality: "default",
@@ -72,7 +78,7 @@
          },
        }))
        
-       console.log(nodesWithConnections);
+       //console.log(nodesWithConnections);
  
        setElements([...nodesWithConnections, ...data.edges])
        setFilteredElements([...nodesWithConnections, ...data.edges])
@@ -121,7 +127,7 @@
   
     const newFilteredElements = [...filteredNodes, ...filteredEdges];
     setFilteredElements(newFilteredElements);
-  
+    //console.log("Filtered elements:", newFilteredElements);
     if (cyRef.current) {
       cyRef.current.elements().remove();
       cyRef.current.add(newFilteredElements);
@@ -205,13 +211,14 @@
        },
      },
      {
-       selector: "node:selected",
-       style: {
-         "border-width": 3,
+      selector: `node[id = '${selectedInstitution?.id}']`,
+      style: {
+        "border-width": 3,
          "border-color": "#FFA500",
          "background-color": "#9403fc",
-       },
-     },
+      },
+    },
+     
      {
        selector: "edge:selected",
        style: {
@@ -234,18 +241,32 @@
      event.stopPropagation()
      const node = event.target.data()
      setSelectedInstitution(node)
+     
    }, [])
  
    const toggleFullscreen = () => {
-     setIsFullscreen(!isFullscreen)
-   }
+    if (!isFullscreen && cyRef.current) {
+      // Captura as posições dos nós antes de entrar no modo fullscreen
+      const positions = new Map<string, { x: number; y: number }>();
+      cyRef.current.nodes().forEach((node) => {
+        positions.set(node.id(), { x: node.position().x, y: node.position().y });
+      });
+      setNodePositions(positions);
+    }
+  
+    setIsFullscreen(!isFullscreen);
+  };
  
    const initializeCytoscape = useCallback(
+    
     (cy: Core) => {
+      
       cyRef.current = cy;
       cy.removeListener("tap");
       cy.on("tap", "node", handleNodeClick);
+      
       cy.on("tap", (event) => {
+        
         if (event.target === cy) {
           setSelectedInstitution(null);
         }
@@ -284,152 +305,335 @@
    }
  
    return (
-     <div className="space-y-6">
-       <h1 className="text-3xl font-bold">Metagrafo de Instituições</h1>
- 
-       <p className="text-muted-foreground">
-         Este grafo mostra as relações entre instituições acadêmicas. Cada nó representa uma instituição, e o tamanho do
-         nó indica o número de pesquisadores. As arestas representam relações de orientação entre pesquisadores dessas
-         instituições, e a espessura indica a quantidade de relações.
-       </p>
- 
-       <div className="flex flex-wrap gap-4">
-         <Select value={institutionFilter} onValueChange={setInstitutionFilter}>
-           <SelectTrigger className="w-[280px]">
-             <SelectValue placeholder="Filtrar por instituição" />
-           </SelectTrigger>
-           <SelectContent>
-             <SelectItem value="Todas">Todas as Instituições</SelectItem>
-             {institutions.map((inst) => (
-               <SelectItem key={inst} value={inst}>
-                 {inst}
-               </SelectItem>
-             ))}
-           </SelectContent>
-         </Select>
-       </div>
- 
-       <div className="grid md:grid-cols-3 gap-6">
-         <div className="md:col-span-2 border border-gray-300 rounded-lg relative" style={{ height: "600px" }}>
-           <button
-             onClick={toggleFullscreen}
-             className="absolute top-2 right-2 bg-white p-2 rounded-full shadow-md z-10"
-           >
-             {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
-           </button>
-           <CytoscapeComponent
-             elements={filteredElements}
-             stylesheet={stylesheet}
-             style={{ width: "100%", height: "100%" }}
-             minZoom={0.5}
-             maxZoom={2}
-             wheelSensitivity={0.2}
-             cy={initializeCytoscape}
-             userZoomingEnabled={true}
-             userPanningEnabled={true}
-             boxSelectionEnabled={false}
-           />
-         </div>
- 
-         <div>
-           {selectedInstitution ? (
-             <Card>
-               <CardHeader>
-                 <CardTitle>{selectedInstitution.label}</CardTitle>
-                 <CardDescription>Detalhes da instituição</CardDescription>
-               </CardHeader>
-               <CardContent>
-                 <div className="space-y-4">
-                   <div>
-                     <p className="text-sm font-medium">Pesquisadores</p>
-                     <p className="text-2xl">{selectedInstitution.size}</p>
-                   </div>
-                   <div>
-                     <p className="text-sm font-medium">Orientações fornecidas</p>
-                     <p className="text-2xl">{selectedInstitution.outgoing}</p>
-                   </div>
-                   <div>
-                     <p className="text-sm font-medium">Orientações recebidas</p>
-                     <p className="text-2xl">{selectedInstitution.incoming}</p>
-                   </div>
-                   <div>
-                     <p className="text-sm font-medium">Conexões totais</p>
-                     <p className="text-2xl">{selectedInstitution.connections}</p>
-                   </div>
-                   <div>
-                     <p className="text-sm font-medium">Balanço de influência</p>
-                     <p
-                       className={`text-2xl ${selectedInstitution.outgoing > selectedInstitution.incoming ? "text-green-600" : "text-blue-600"}`}
-                     >
-                       {selectedInstitution.outgoing > selectedInstitution.incoming ? "Influenciadora" : "Receptora"}
-                     </p>
-                   </div>
-                 </div>
-               </CardContent>
-             </Card>
-           ) : (
-             <Card>
-               <CardHeader>
-                 <CardTitle>Informações</CardTitle>
-                 <CardDescription>Selecione uma instituição para ver detalhes</CardDescription>
-               </CardHeader>
-               <CardContent>
-                 <p>Clique em uma instituição no grafo para visualizar suas estatísticas e relações.</p>
-                 <p className="mt-4">
-                   O tamanho de cada nó representa o número de pesquisadores formados pela instituição.
-                 </p>
-                 <p className="mt-2">
-                   A espessura das arestas representa a quantidade de relações de orientação entre as instituições.
-                 </p>
-                 <p className="mt-2 text-orange-600">
-                   As arestas em vermelho representam auto-orientações (mesma instituição).
-                 </p>
-               </CardContent>
-             </Card>
-           )}
-         </div>
-       </div>
- 
-       {isFullscreen && (
-   <div className="fixed inset-0 z-50 bg-white">
-     <div className="border border-gray-300 rounded-lg relative" style={{ height: "100%" }}>
-       <button
-         onClick={toggleFullscreen}
-         className="absolute top-2 right-2 bg-white p-2 rounded-full shadow-md z-10"
-       >
-         <Minimize size={16} />
-       </button>
-       <CytoscapeComponent
-         elements={filteredElements} 
-         stylesheet={stylesheet} 
-         style={{ width: "100%", height: "100%" }}
-         minZoom={0.5}
-         maxZoom={2}
-         wheelSensitivity={0.2}
-         cy={(cy) => {
-           if (!cy) return; 
-           cyRef.current = cy; 
- 
-           setTimeout(() => {
-             if (cyRef.current) {
-               cyRef.current.batch(() => {
-                 cyRef.current.elements().remove(); 
-                 cyRef.current.add(filteredElements); 
-                 const layoutInstance = cyRef.current.layout(layout); 
-                 layoutInstance.run();
-                 cyRef.current.resize(); 
-                 cyRef.current.fit(); 
-               });
-             }
-           }, 0);
-         }}
-         userZoomingEnabled={true}
-         userPanningEnabled={true}
-         boxSelectionEnabled={false}
-       />
-     </div>
-   </div>
- )}
-     </div>
-   )
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold">Metagrafo de Instituições</h1>
+  
+      <p className="text-muted-foreground">
+        Este grafo mostra as relações entre instituições acadêmicas. Cada nó representa uma instituição, e o tamanho do
+        nó indica o número de pesquisadores. As arestas representam relações de orientação entre pesquisadores dessas
+        instituições, e a espessura indica a quantidade de relações.
+      </p>
+  
+      <div className="flex flex-wrap gap-4">
+        <Select value={institutionFilter} onValueChange={setInstitutionFilter}>
+          <SelectTrigger className="w-[280px]">
+            <SelectValue placeholder="Filtrar por instituição" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Todas">Todas as Instituições</SelectItem>
+            {institutions.map((inst) => (
+              <SelectItem key={inst} value={inst}>
+                {inst}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+  
+      <div className="grid md:grid-cols-3 gap-6">
+        <div
+          className={`md:col-span-2 border border-gray-300 rounded-lg relative ${
+            isFullscreen ? "fixed inset-0 z-50 bg-white flex" : ""
+          }`}
+          style={{ height: isFullscreen ? "100vh" : "600px" }}
+        >
+          <button
+            onClick={() => {
+              toggleFullscreen();
+              if (cyRef.current) {
+                setTimeout(() => {
+                  cyRef.current.resize();
+                  cyRef.current.fit();
+                }, 0);
+              }
+            }}
+            className="absolute top-2 right-2 bg-white p-2 rounded-full shadow-md z-10"
+          >
+            {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
+          </button>
+          <CytoscapeComponent
+            elements={filteredElements}
+            stylesheet={stylesheet}
+            style={{ width: "100%", height: "100%" }}
+            minZoom={0.5}
+            maxZoom={2}
+            wheelSensitivity={0.2}
+            cy={(cy) => {
+              if (!cy) return;
+              cyRef.current = cy;
+            
+              // Chama a função initializeCytoscape para configurar o grafo
+              initializeCytoscape(cy);
+            
+             
+            
+              // Reseta o estado quando sair do modo fullscreen
+              if (!isFullscreen && fullscreenInitialized) {
+                setFullscreenInitialized(false);
+              }
+            }}
+            userZoomingEnabled={true}
+            userPanningEnabled={true}
+            boxSelectionEnabled={false}
+          />
+        </div>
+  
+        {/* Bloco de informações da instituição */}
+        {!isFullscreen && (
+          <div>
+            {selectedInstitution ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>{selectedInstitution.label}</CardTitle>
+                  <CardDescription>Detalhes da instituição</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-sm font-medium">Pesquisadores</p>
+                      <p className="text-2xl">{selectedInstitution.size}</p>
+                    </div>
+                    <div>
+  <p className="text-sm font-medium">Orientações fornecidas</p>
+  <p className="text-2xl">
+  {institutionFilter === "Todas"
+      ? selectedInstitution.outgoing
+      : selectedInstitution.id === institutionFilter ?  selectedInstitution.outgoing : selectedInstitution?.conexao_instituicao?.[institutionFilter] || 0}
+  </p>
+</div>
+<div>
+  <p className="text-sm font-medium">Orientações recebidas</p>
+  <p className="text-2xl">
+  {institutionFilter === "Todas"
+      ? selectedInstitution.incoming
+      : selectedInstitution.id === institutionFilter ?  selectedInstitution.incoming : selectedInstitution?.conexao_instituicao_incoming?.[institutionFilter] || 0}
+  </p>
+</div>
+                    <div>
+                      <p className="text-sm font-medium">Conexões totais</p>
+                      <p className="text-2xl">{selectedInstitution.connections}</p>
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <p className="text-sm font-medium">Coeficiente de influência</p>
+                        <button
+                          onClick={handlePopupToggle}
+                          className="p-0.5 px-2 border border-gray-300 rounded-md bg-black text-white hover:bg-gray-800 hover:border-gray-500 leading-none"
+                          aria-label="O que é o coeficiente de influência?"
+                        >
+                          ?
+                        </button>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <p className="text-2xl">
+                        {institutionFilter === "Todas"
+  ? selectedInstitution.coeficiente_influencia !== undefined
+    ? `${Number(selectedInstitution.coeficiente_influencia).toFixed(2)}`
+    : "Não especificado"
+  : selectedInstitution.id === institutionFilter
+  ? selectedInstitution.coeficiente_influencia
+  : selectedInstitution?.conexao_instituicao_incoming?.[institutionFilter] > 0
+  ? `${(
+      (selectedInstitution?.conexao_instituicao?.[institutionFilter] || 0) /
+      (selectedInstitution?.conexao_instituicao_incoming?.[institutionFilter] || 1)
+    ).toFixed(2)}`
+  : `${(selectedInstitution?.conexao_instituicao?.[institutionFilter] || 0).toFixed(2)}`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Informações</CardTitle>
+                  <CardDescription>Selecione uma instituição para ver detalhes</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p>Clique em uma instituição no grafo para visualizar suas estatísticas e relações.</p>
+                  <p className="mt-4">
+                    O tamanho de cada nó representa o número de pesquisadores formados pela instituição.
+                  </p>
+                  <p className="mt-2">
+                    A espessura das arestas representa a quantidade de relações de orientação entre as instituições.
+                  </p>
+                  <p className="mt-2 text-orange-600">
+                    As arestas em vermelho representam auto-orientações (mesma instituição).
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+      </div>
+  
+      {/* Fullscreen com informações */}
+      {isFullscreen && (
+        <div className="fixed inset-0 z-50 bg-white flex">
+          <div className="flex-1 border border-gray-300 rounded-lg relative">
+            <button
+              onClick={toggleFullscreen}
+              className="absolute top-2 right-2 bg-white p-2 rounded-full shadow-md z-10"
+            >
+              <Minimize size={16} />
+            </button>
+            <CytoscapeComponent
+              elements={filteredElements}
+              stylesheet={stylesheet}
+              style={{ width: "100%", height: "100%" }}
+              minZoom={0.5}
+              maxZoom={2}
+              wheelSensitivity={0.2}
+              cy={(cy) => {
+                if (!cy) return;
+                cyRef.current = cy;
+              
+                // Chama a função initializeCytoscape para configurar o grafo
+                initializeCytoscape(cy);
+                //console.log("Instituiçao selecionada:", selectedInstitution);
+                
+                // Atualiza os elementos no modo fullscreen apenas uma vez
+                if (isFullscreen && !fullscreenInitialized) {
+                  setFullscreenInitialized(true); // Marca como inicializado
+              
+                  setTimeout(() => {
+                    if (cyRef.current) {
+                      cyRef.current.batch(() => {
+                        cyRef.current.elements().remove();
+                        cyRef.current.add(filteredElements);
+              
+                        // Aplica as posições capturadas
+                        nodePositions.forEach((position, id) => {
+                          const node = cyRef.current?.getElementById(id);
+                          if (node) {
+                            node.position(position);
+                          }
+                        });
+              
+                        // Ajusta o zoom e o tamanho sem recalcular o layout
+                        cyRef.current.resize();
+                        cyRef.current.fit();
+                      });
+                    }
+                  }, 0);
+                }
+              
+                // Reseta o estado quando sair do modo fullscreen
+                if (!isFullscreen && fullscreenInitialized) {
+                  setFullscreenInitialized(false);
+                }
+              }}
+              userZoomingEnabled={true}
+              userPanningEnabled={true}
+              boxSelectionEnabled={false}
+            />
+          </div>
+          <div className="w-[400px] border-l border-gray-300 p-4 overflow-y-auto">
+            {selectedInstitution ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>{selectedInstitution.label}</CardTitle>
+                  <CardDescription>Detalhes da instituição</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-sm font-medium">Pesquisadores</p>
+                      <p className="text-2xl">{selectedInstitution.size}</p>
+                    </div>
+                    <div>
+  <p className="text-sm font-medium">Orientações fornecidas</p>
+  <p className="text-2xl">
+  {institutionFilter === "Todas"
+      ? selectedInstitution.outgoing
+      : selectedInstitution.id === institutionFilter ?  selectedInstitution.outgoing : selectedInstitution?.conexao_instituicao?.[institutionFilter] || 0}
+  </p>
+</div>
+<div>
+  <p className="text-sm font-medium">Orientações recebidas</p>
+  <p className="text-2xl">
+  {institutionFilter === "Todas"
+      ? selectedInstitution.incoming
+      : selectedInstitution.id === institutionFilter ?  selectedInstitution.incoming : selectedInstitution?.conexao_instituicao_incoming?.[institutionFilter] || 0}
+  </p>
+</div>
+                    <div>
+                      <p className="text-sm font-medium">Conexões totais</p>
+                      <p className="text-2xl">{selectedInstitution.connections}</p>
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <p className="text-sm font-medium">Coeficiente de influência</p>
+                        <button
+                          onClick={handlePopupToggle}
+                          className="p-0.5 px-2 border border-gray-300 rounded-md bg-black text-white hover:bg-gray-800 hover:border-gray-500 leading-none"
+                          aria-label="O que é o coeficiente de influência?"
+                        >
+                          ?
+                        </button>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <p className="text-2xl">
+                        {institutionFilter === "Todas"
+  ? selectedInstitution.coeficiente_influencia !== undefined
+    ? `${Number(selectedInstitution.coeficiente_influencia).toFixed(2)}`
+    : "Não especificado"
+  : selectedInstitution.id === institutionFilter
+  ? selectedInstitution.coeficiente_influencia
+  : selectedInstitution?.conexao_instituicao_incoming?.[institutionFilter] > 0
+  ? `${(
+      (selectedInstitution?.conexao_instituicao?.[institutionFilter] || 0) /
+      (selectedInstitution?.conexao_instituicao_incoming?.[institutionFilter] || 1)
+    ).toFixed(2)}`
+  : `${(selectedInstitution?.conexao_instituicao?.[institutionFilter] || 0).toFixed(2)}`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Informações</CardTitle>
+                  <CardDescription>Selecione uma instituição para ver detalhes</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p>Clique em uma instituição no grafo para visualizar suas estatísticas e relações.</p>
+                  <p className="mt-4">
+                    O tamanho de cada nó representa o número de pesquisadores formados pela instituição.
+                  </p>
+                  <p className="mt-2">
+                    A espessura das arestas representa a quantidade de relações de orientação entre as instituições.
+                  </p>
+                  <p className="mt-2 text-orange-600">
+                    As arestas em vermelho representam auto-orientações (mesma instituição).
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
+      )}
+      {showPopup && (
+  <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
+    <div className="bg-white p-6 rounded-lg shadow-lg max-w-md">
+      <h2 className="text-lg font-bold mb-4">O que é o coeficiente de influência?</h2>
+      <p>
+        O coeficiente de influência mede a relação entre o número de orientações recebidas e fornecidas por uma
+        instituição. Um valor maior indica que a instituição tem mais influência em orientar pesquisadores do que em ser orientada.
+      </p>
+      <button
+        onClick={handlePopupToggle}
+        className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+      >
+        Fechar
+      </button>
+    </div>
+  </div>
+)}
+    </div>
+    
+  )
  }

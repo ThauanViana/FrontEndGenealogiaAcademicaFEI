@@ -36,7 +36,7 @@ const [originalLabels, setOriginalLabels] = useState<string[]>([]);
 const [selectedInstitution, setSelectedInstitution] = useState<string | null>(null);
 const [selectedResearcher, setSelectedResearcher] = useState<string | null>(null);
 const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | null>(null);
-
+const [shouldHandleInstitutionFilter, setShouldHandleInstitutionFilter] = useState(false);
   const fetchGraphData = useCallback(async (pesquisadorId?: string) => {
     try {
       setLoading(true);
@@ -78,7 +78,7 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
       setOriginalLabels(data.elements.filter((el) => el.group === "nodes").map((node) => node.data.label));
       setLabels(data.elements.filter((el) => el.group === "nodes").map((node) => node.data.label));
       setLoading(false);
-      console.log("Dados do grafo:", data);
+      //console.log("Dados do grafo:", data);
     } catch (err) {
       console.error("Erro ao buscar dados:", err);
       setError(err instanceof Error ? err.message : "Erro desconhecido");
@@ -89,8 +89,13 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
   useEffect(() => {
     fetchGraphData();
   }, [fetchGraphData]);
+  useEffect(() => {
+    if (shouldHandleInstitutionFilter && firstFilter === "institution" && selectedInstitution) {
+      handleInstitutionFilterChange(selectedInstitution);
+      setShouldHandleInstitutionFilter(false); // Reseta a variável de controle
+    }
+  }, [shouldHandleInstitutionFilter, firstFilter, selectedInstitution]);
 
- 
   const buildTreeRecursively = (nodeId: string, visitedNodes: Set<string>, nodeIdsToInclude: Set<string>) => {
     graphData.forEach((el) => {
       if (el.group === "edges" && (el.data.source === nodeId || el.data.target === nodeId)) {
@@ -133,7 +138,7 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
       });
       
   
-      console.log("Reaplicando layout com configurações:", layout.options.elk);
+      //console.log("Reaplicando layout com configurações:", layout.options.elk);
   
       layout.run();
   
@@ -150,13 +155,14 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
     if (value === "Todas") {
       // Retorna ao estado inicial
       setSelectedInstitution(null);
-      setSelectedResearcher(null);
+      //setSelectedResearcher(null);
+      setFilteredInstitutionId(null);
       setCytoscapeElements(graphData);
-      setLabels(originalLabels); // Mostra todos os pesquisadores
-      setInstitutions(originalInstitutions); // Mostra todas as instituições
+      
 
       if (firstFilter === "institution" && selectedResearcher === null) {
-
+        setLabels(originalLabels); // Mostra todos os pesquisadores
+      setInstitutions(originalInstitutions); // Mostra todas as instituições
         setFirstFilter(null); // Reseta o primeiro filtro
       }else if (firstFilter === "institution" && selectedResearcher !== null) {
         setFirstFilter("researcher"); // Mantém o filtro de pesquisador
@@ -212,11 +218,46 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
       setSelectedInstitution(value);
       setFilteredInstitutionId(value);
 
-      
+      if (firstFilter === "institution") {
+        console.log("RODOU AQUI!! INSTITUIÇAO")
+        // Filtra os nós que pertencem à instituição selecionada
+        const filteredNodes = graphData.filter(
+          (el) =>
+            el.group === "nodes" &&
+            el.data.instituicaoCorrespondente === value
+        );
+  
+        // Cria um conjunto com os IDs dos nós filtrados
+        const filteredNodeIds = new Set(filteredNodes.map((node) => node.data.id));
+  
+        // Constrói a árvore recursivamente
+        const visitedNodes = new Set(filteredNodeIds);
+        filteredNodeIds.forEach((nodeId) => {
+          buildTreeRecursively(nodeId, visitedNodes, filteredNodeIds);
+        });
+  
+        // Filtra os nós finais com base nos IDs coletados
+        const finalFilteredNodes = graphData.filter(
+          (el) => el.group === "nodes" && filteredNodeIds.has(el.data.id)
+        );
+  
+        // Filtra as arestas que conectam os nós finais
+        const finalFilteredEdges = graphData.filter(
+          (el) =>
+            el.group === "edges" &&
+            filteredNodeIds.has(el.data.source) &&
+            filteredNodeIds.has(el.data.target)
+        );
+
+        
+  
+        // Atualiza os elementos do grafo com os nós e arestas filtrados
+        setCytoscapeElements([...finalFilteredNodes, ...finalFilteredEdges]);
+      }
         
       }
     }
-  
+    //console.log("Valor do firstfilter:", firstFilter);
     setShouldReapplyLayout(true);
   };
   
@@ -226,16 +267,23 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
     if (value === "Todos") {
       // Retorna ao estado inicial
       setSelectedResearcher(null);
-      setSelectedInstitution(null);
-      setCytoscapeElements(graphData);
-      setLabels(originalLabels); // Mostra todos os pesquisadores
-      setInstitutions(originalInstitutions); // Mostra todas as instituições
+      
+      setFilteredResearcherId(null);
+      
+      
+      //setInstitutions(originalInstitutions); // Mostra todas as instituições
       if (firstFilter === "researcher" && selectedInstitution === null) {
-
+        setLabels(originalLabels); // Mostra todos os pesquisadores
+        setSelectedInstitution(null);
+        setInstitutions(originalInstitutions);
         setFirstFilter(null); // Reseta o primeiro filtro
-      }else if (firstFilter === "researcher" && selectedInstitution !== null) {
+        setCytoscapeElements(graphData);
+      }else if (selectedInstitution !== null) {
+        
         setFirstFilter("institution"); // Mantém o filtro de pesquisador
-        handleInstitutionFilterChange(selectedInstitution); // Aplica o filtro de pesquisador novamente
+        console.log("valor do firstfilter:", firstFilter) 
+        
+        console.log("RODOU AQUI!!")
       }
     } else {
       setSelectedResearcher(value);
@@ -335,7 +383,7 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
 
     
     setShouldReapplyLayout(true);
-    console.log("Valor do firstfilter:", firstFilter);
+    //console.log("Valor do firstfilter:", firstFilter);
   };
   
   const stylesheet = [
@@ -388,16 +436,16 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
       },
     },
     {
-      selector: `node[id = '${filteredResearcherId}']`, // Estilo dinâmico para o pesquisador filtrado
+      selector: `node[id = '${filteredResearcherId}']`, 
       style: {
         "background-color": "#FFA500", // Cor laranja
     
       },
     },
     {
-      selector: "node.selected", // Estilo para o nó selecionado
+      selector: "node.selected", 
       style: {
-        "background-color": "#800080", // Cor roxa
+        "background-color": "#800080", 
       },
     },
     {
@@ -443,162 +491,181 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
     quantidadeDeNetos: "Quantidade de Netos Acadêmicos",
   };
   return (
-    
     <div className="space-y-6">
-    <h1 className="text-3xl font-bold">Grafo de Genealogia Acadêmica</h1>
-
-    <div className="flex flex-wrap gap-4">
-      <Select value={institutionFilter} onValueChange={handleInstitutionFilterChange}>
-        <SelectTrigger className="w-[280px]">
-          <SelectValue placeholder="Instituição" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="Todas">Todas as Instituições</SelectItem>
-          {[...new Set(institutions)]
-            .sort((a, b) => a.localeCompare(b))
-            .map((inst) => (
-              <SelectItem key={inst} value={inst}>
-                {inst}
-              </SelectItem>
-            ))}
-        </SelectContent>
-      </Select>
-      <Select value={labelFilter} onValueChange={handleLabelFilterChange}>
-        <SelectTrigger className="w-[280px]">
-          <SelectValue placeholder="Label" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="Todos">Todos os Pesquisadores</SelectItem>
-          {[...new Set(labels)]
-            .sort((a, b) => a.localeCompare(b))
-            .map((label) => (
-              <SelectItem key={label} value={label}>
-                {label}
-              </SelectItem>
-            ))}
-        </SelectContent>
-      </Select>
-      <button
-        onClick={() => {
-          setSelectedPesquisador(null);
-          fetchGraphData();
-        }}
-        className="bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600 ml-auto"
-      >
-        Recarregar grafo
-      </button>
-    </div>
-
-    <div className="flex">
-      {/* Área do grafo */}
-      <div className={`flex-1 border border-gray-300 rounded-lg relative ${selectedNode ? "mr-4" : ""}`} style={{ height: "600px" }}>
-        <button onClick={toggleFullscreen} className="absolute top-2 right-2 bg-white p-2 rounded-full shadow-md z-10">
-          {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
-        </button>
-        <CytoscapeComponent
-          elements={cytoscapeElements}
-          stylesheet={stylesheet}
-          style={{ width: "100%", height: "100%" }}
-          minZoom={0.01}
-          maxZoom={3}
-          wheelSensitivity={0.2}
-          cy={(cy) => {
-            cyRef.current = cy;
-
-            if (!isLayoutApplied) {
-              const layout = cy.layout({
-                name: "elk",
-                elk: {
-                  algorithm: "layered", // ou "mrtree", mas "layered" costuma separar melhor
-                  "elk.spacing.nodeNode": 100, // Espaçamento entre nós
-                  "elk.layered.spacing.nodeNodeBetweenLayers": 125, // Espaço vertical entre camadas
-                  "elk.layered.spacing.edgeNodeBetweenLayers": 100, // Espaço de arestas
-                  "elk.spacing.edgeEdge": 50, // Espaço entre arestas
-                  "elk.spacing.componentComponent": 100, // Espaço entre componentes desconectados
-                  "elk.direction": "DOWN", // Direção do layout
-                  "elk.layered.nodePlacement.bk.fixedAlignment": "BALANCED", // Deixa a árvore mais equilibrada
-                },
-                fit: true,
-                animate: false,
-              });
-              
-          
-              layout.run();
-              //cy.zoom(cy.zoom() * 0.3); 
-              setIsLayoutApplied(true); // Marca o layout como aplicado
-            }
-
-            cy.on("tap", "node", (evt) => {
-              const node = evt.target;
-            
-              // Remove a classe 'selected' de todos os nós
-              cy.elements("node").removeClass("selected");
-            
-              // Adiciona a classe 'selected' ao nó clicado
-              node.addClass("selected");
-            
-              // Atualiza o estado do nó selecionado
-              setSelectedNode(node.data());
-            });
+      <h1 className="text-3xl font-bold">Grafo de Genealogia Acadêmica</h1>
+  
+      <div className="flex flex-wrap gap-4">
+        {/* Filtro por Instituição */}
+        <Select value={institutionFilter} onValueChange={handleInstitutionFilterChange}>
+          <SelectTrigger className="w-[280px]">
+            <SelectValue placeholder="Instituição" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Todas">Todas as Instituições</SelectItem>
+            {[...new Set(institutions)]
+              .sort((a, b) => a.localeCompare(b))
+              .map((inst) => (
+                <SelectItem key={inst} value={inst}>
+                  {inst}
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
+  
+        {/* Filtro por Label */}
+        <Select value={labelFilter} onValueChange={handleLabelFilterChange}>
+          <SelectTrigger className="w-[280px]">
+            <SelectValue placeholder="Label" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Todos">Todos os Pesquisadores</SelectItem>
+            {[...new Set(labels)]
+              .sort((a, b) => a.localeCompare(b))
+              .map((label) => (
+                <SelectItem key={label} value={label}>
+                  {label}
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
+  
+        {/* Botão para recarregar o grafo */}
+        <button
+          onClick={() => {
+            setSelectedPesquisador(null);
+            fetchGraphData();
           }}
-        />
+          className="bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600 ml-auto self-start"
+        >
+          Recarregar grafo
+        </button>
       </div>
+  
+      {/* Área principal: grafo + detalhes */}
+      <div
+  className={`flex ${isFullscreen ? "fixed inset-0 z-50 bg-white p-4" : ""}`}
+  style={isFullscreen ? { height: "100vh" } : { height: "auto"}}
+>
 
-
-{/* Retângulo para exibir as propriedades do nó */}
-<div style={{ maxWidth: "400px", minWidth: "300px" }}>
-  {selectedNode ? (
-    <Card>
-      <CardHeader>
-        <CardTitle>{selectedNode.label}</CardTitle>
-        <CardDescription>Detalhes do pesquisador</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-        <div>
-            <p className="text-sm font-medium">Instituição Correspondente</p>
-            <p className="text-2xl">{selectedNode.instituicaoCorrespondente || "Não especificado"}</p>
-          </div>
-          <div>
-            <p className="text-sm font-medium">Área de Doutorado</p>
-            <p className="text-2xl">{selectedNode.areaDoutorado || "Não especificado"}</p>
-          </div>
-          <div>
-            <p className="text-sm font-medium">Quantidade de Filhos Acadêmicos</p>
-            <p className="text-2xl">{selectedNode.quantidadeDeFilhos || 0}</p>
-          </div>
-          <div>
-            <p className="text-sm font-medium">Quantidade de Netos Acadêmicos</p>
-            <p className="text-2xl">{selectedNode.quantidadeDeNetos || 0}</p>
-          </div>
-          
-          <div>
-            <p className="text-sm font-medium">ID Lattes</p>
-            <p className="text-2xl">{selectedNode.id || "Não especificado"}</p>
-          </div>
-          
+        {/* Área do grafo */}
+        <div
+          className="flex-1 border border-gray-300 rounded-lg relative"
+          style={{ height: isFullscreen ? "100%" : "600px", width: isFullscreen ? "100%" : "75%" }}
+        >
+          <button
+            onClick={() => {
+              toggleFullscreen();
+              if (cyRef.current) {
+                setTimeout(() => {
+                  cyRef.current.resize();
+                  cyRef.current.fit();
+                }, 0);
+              }
+            }}
+            className="absolute top-2 right-2 bg-white p-2 rounded-full shadow-md z-10"
+          >
+            {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
+          </button>
+          <CytoscapeComponent
+            elements={cytoscapeElements}
+            stylesheet={stylesheet}
+            style={{ width: "100%", height: "100%" }}
+            minZoom={0.01}
+            maxZoom={3}
+            wheelSensitivity={0.2}
+            cy={(cy) => {
+              cyRef.current = cy;
+  
+              if (!isLayoutApplied) {
+                const layout = cy.layout({
+                  name: "elk",
+                  elk: {
+                    algorithm: "layered",
+                    "elk.spacing.nodeNode": 100,
+                    "elk.layered.spacing.nodeNodeBetweenLayers": 125,
+                    "elk.layered.spacing.edgeNodeBetweenLayers": 100,
+                    "elk.spacing.edgeEdge": 50,
+                    "elk.spacing.componentComponent": 100,
+                    "elk.direction": "DOWN",
+                    "elk.layered.nodePlacement.bk.fixedAlignment": "BALANCED",
+                  },
+                  fit: true,
+                  animate: false,
+                });
+  
+                layout.run();
+                cy.fit();
+                setIsLayoutApplied(true);
+              }
+  
+              cy.on("tap", "node", (evt) => {
+                const node = evt.target;
+  
+                
+                cy.elements("node").removeClass("selected");
+  
+                node.addClass("selected");
+  
+                
+                setSelectedNode(node.data());
+              });
+            }}
+          />
         </div>
-      </CardContent>
-    </Card>
-  ) : (
-    <Card>
-      <CardHeader>
-        <CardTitle>Informações</CardTitle>
-        <CardDescription>Selecione um pesquisador para ver detalhes</CardDescription>
-      </CardHeader>
-      <CardContent>
-  <p>Clique em um nó no grafo para visualizar informações como:</p>
-  <ul className="mt-4 space-y-2 list-disc list-inside">
-    <li>Instituição do pesquisador</li>
-    <li>Quantidade de filhos acadêmicos</li>
-    <li>Quantidade de netos acadêmicos</li>
-    <li>ID Lattes</li>
-  </ul>
-</CardContent>
-    </Card>
-  )}
-</div>
+  
+        {/* Retângulo para exibir as propriedades do nó */}
+        <div style={{ maxWidth: "400px", minWidth: "300px" }}>
+          {selectedNode ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>{selectedNode.label}</CardTitle>
+                <CardDescription>Detalhes do pesquisador</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-medium">Instituição Correspondente</p>
+                    <p className="text-2xl">{selectedNode.instituicaoCorrespondente || "Não especificado"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Área de Doutorado</p>
+                    <p className="text-2xl">{selectedNode.areaDoutorado || "Não especificado"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Quantidade de Filhos Acadêmicos</p>
+                    <p className="text-2xl">{selectedNode.quantidadeDeFilhos || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">Quantidade de Netos Acadêmicos</p>
+                    <p className="text-2xl">{selectedNode.quantidadeDeNetos || 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">ID Lattes</p>
+                    <p className="text-2xl">{selectedNode.id || "Não especificado"}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Informações</CardTitle>
+                <CardDescription>Selecione um pesquisador para ver detalhes</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p>Clique em um nó no grafo para visualizar informações como:</p>
+                <ul className="mt-4 space-y-2 list-disc list-inside">
+                  <li>Instituição do pesquisador</li>
+                  <li>Quantidade de filhos acadêmicos</li>
+                  <li>Quantidade de netos acadêmicos</li>
+                  <li>ID Lattes</li>
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
     </div>
-  </div>
   )
+  
 }

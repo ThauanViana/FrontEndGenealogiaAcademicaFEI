@@ -23,7 +23,8 @@ export async function GET() {
     await session.close();
 
     const institutionsMap = new Map();
-    const conexao_instituicao = new Map(); // Dicionário para conexões entre instituições
+    const conexao_instituicao = new Map(); // Dicionário para conexões de saída entre instituições
+    const conexao_instituicao_incoming = new Map(); // Dicionário para conexões de entrada entre instituições
 
     result.records.forEach((record) => {
       const sourceInst = record.get("sourceInst");
@@ -35,9 +36,18 @@ export async function GET() {
         conexao_instituicao.set(sourceInst, {});
       }
 
+      // Inicializa o dicionário para a instituição de destino, se necessário
+      if (!conexao_instituicao_incoming.has(targetInst)) {
+        conexao_instituicao_incoming.set(targetInst, {});
+      }
+
       // Adiciona ou atualiza a quantidade de outgoing para a instituição de destino
       const sourceConnections = conexao_instituicao.get(sourceInst);
       sourceConnections[targetInst] = (sourceConnections[targetInst] || 0) + weight;
+
+      // Adiciona ou atualiza a quantidade de incoming para a instituição de origem
+      const targetConnections = conexao_instituicao_incoming.get(targetInst);
+      targetConnections[sourceInst] = (targetConnections[sourceInst] || 0) + weight;
 
       // Inicializa o institutionsMap, se necessário
       if (!institutionsMap.has(sourceInst)) {
@@ -72,7 +82,7 @@ export async function GET() {
       }
     });
 
-    // Cria os nós e inclui o dicionário de conexões
+    // Cria os nós e inclui os dicionários de conexões
     const nodes = Array.from(institutionsMap.entries()).map(([name, data]) => ({
       data: {
         id: name,
@@ -80,7 +90,9 @@ export async function GET() {
         size: data.count,
         outgoing: data.outgoing,
         incoming: data.incoming,
-        conexao_instituicao: conexao_instituicao.get(name) || {}, // Inclui o dicionário de conexões
+        conexao_instituicao: conexao_instituicao.get(name) || {}, // Inclui o dicionário de conexões de saída
+        conexao_instituicao_incoming: conexao_instituicao_incoming.get(name) || {}, // Inclui o dicionário de conexões de entrada
+        coeficiente_influencia: data.incoming > 0 ? data.outgoing / data.incoming : data.outgoing, // Coeficiente de influência
       },
     }));
 
