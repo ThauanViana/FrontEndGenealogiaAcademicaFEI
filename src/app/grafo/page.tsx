@@ -138,7 +138,7 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
   
       // Ajusta o zoom para caber no grafo
       cy.fit();
-  
+      //cy.zoom(cy.zoom() * 0.5); 
       // Marque que o layout foi reaplicado
       setShouldReapplyLayout(false);
     }
@@ -153,40 +153,67 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
       setCytoscapeElements(graphData);
       setLabels(originalLabels); // Mostra todos os pesquisadores
       setInstitutions(originalInstitutions); // Mostra todas as instituições
+
+      if (firstFilter === "institution" && selectedResearcher === null) {
+
+        setFirstFilter(null); // Reseta o primeiro filtro
+      }else if (firstFilter === "institution" && selectedResearcher !== null) {
+        setFirstFilter("researcher"); // Mantém o filtro de pesquisador
+        handleLabelFilterChange(selectedResearcher); // Aplica o filtro de pesquisador novamente
+      }
     } else {
+      if (firstFilter === null) {
+        // Caso seja o primeiro filtro aplicado
+        setFirstFilter("institution");
+        setSelectedInstitution(value);
+        setFilteredInstitutionId(value);
+  
+        // Filtra os nós que pertencem à instituição selecionada
+        const filteredNodes = graphData.filter(
+          (el) =>
+            el.group === "nodes" &&
+            el.data.instituicaoCorrespondente === value
+        );
+  
+        // Cria um conjunto com os IDs dos nós filtrados
+        const filteredNodeIds = new Set(filteredNodes.map((node) => node.data.id));
+  
+        // Constrói a árvore recursivamente
+        const visitedNodes = new Set(filteredNodeIds);
+        filteredNodeIds.forEach((nodeId) => {
+          buildTreeRecursively(nodeId, visitedNodes, filteredNodeIds);
+        });
+  
+        // Filtra os nós finais com base nos IDs coletados
+        const finalFilteredNodes = graphData.filter(
+          (el) => el.group === "nodes" && filteredNodeIds.has(el.data.id)
+        );
+  
+        // Filtra as arestas que conectam os nós finais
+        const finalFilteredEdges = graphData.filter(
+          (el) =>
+            el.group === "edges" &&
+            filteredNodeIds.has(el.data.source) &&
+            filteredNodeIds.has(el.data.target)
+        );
+
+        // Atualiza a lista de labels com base nos nós filtrados pela instituição
+      const filteredLabels = new Set(
+        finalFilteredNodes.map((node) => node.data.label)
+      );
+
+      setLabels([...filteredLabels]); // Atualiza a lista de labels
+  
+        // Atualiza os elementos do grafo com os nós e arestas filtrados
+        setCytoscapeElements([...finalFilteredNodes, ...finalFilteredEdges]);
+      } else {
+        // Caso o primeiro filtro já tenha sido aplicado
       setSelectedInstitution(value);
-  setFilteredInstitutionId(value);
-      // Filtra os nós que pertencem à instituição selecionada
-      const filteredNodes = graphData.filter(
-        (el) =>
-          el.group === "nodes" &&
-          el.data.instituicaoCorrespondente === value
-      );
-  
-      // Cria um conjunto com os IDs dos nós filtrados
-      const filteredNodeIds = new Set(filteredNodes.map((node) => node.data.id));
-  
-      // Constrói a árvore recursivamente
-      const visitedNodes = new Set(filteredNodeIds);
-      filteredNodeIds.forEach((nodeId) => {
-        buildTreeRecursively(nodeId, visitedNodes, filteredNodeIds);
-      });
-  
-      // Filtra os nós finais com base nos IDs coletados
-      const finalFilteredNodes = graphData.filter(
-        (el) => el.group === "nodes" && filteredNodeIds.has(el.data.id)
-      );
-  
-      // Filtra as arestas que conectam os nós finais
-      const finalFilteredEdges = graphData.filter(
-        (el) =>
-          el.group === "edges" &&
-          filteredNodeIds.has(el.data.source) &&
-          filteredNodeIds.has(el.data.target)
-      );
-  
-      // Atualiza os elementos do grafo com os nós e arestas filtrados
-      setCytoscapeElements([...finalFilteredNodes, ...finalFilteredEdges]);
+      setFilteredInstitutionId(value);
+
+      
+        
+      }
     }
   
     setShouldReapplyLayout(true);
@@ -194,7 +221,7 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
   
   const handleLabelFilterChange = (value: string) => {
     setLabelFilter(value);
-  
+    
     if (value === "Todos") {
       // Retorna ao estado inicial
       setSelectedResearcher(null);
@@ -202,8 +229,18 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
       setCytoscapeElements(graphData);
       setLabels(originalLabels); // Mostra todos os pesquisadores
       setInstitutions(originalInstitutions); // Mostra todas as instituições
+      if (firstFilter === "researcher" && selectedInstitution === null) {
+
+        setFirstFilter(null); // Reseta o primeiro filtro
+      }else if (firstFilter === "researcher" && selectedInstitution !== null) {
+        setFirstFilter("institution"); // Mantém o filtro de pesquisador
+        handleInstitutionFilterChange(selectedInstitution); // Aplica o filtro de pesquisador novamente
+      }
     } else {
       setSelectedResearcher(value);
+      //handleInstitutionFilterChange(institutionFilter); // Aplica o filtro de instituição novamente
+      if(firstFilter === null) {
+        setFirstFilter("researcher");
       
       // Filtra os nós que possuem o label selecionado
       const filteredNodes = graphData.filter(
@@ -241,12 +278,63 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
           filteredNodeIds.has(el.data.source) &&
           filteredNodeIds.has(el.data.target)
       );
+      // Atualiza a lista de instituições com base nos pesquisadores filtrados pelo label
+      const filteredInstitutions = new Set(
+        finalFilteredNodes.map((node) => node.data.instituicaoCorrespondente)
+      );
+  
+      setInstitutions([...filteredInstitutions]); // Atualiza a lista de instituições
   
       // Atualiza os elementos do grafo com os nós e arestas filtrados
       setCytoscapeElements([...finalFilteredNodes, ...filteredEdges]);
-    }
+    }else{
+      // Filtra os nós que possuem o label selecionado
+      const filteredNodes = graphData.filter(
+        (el) => el.group === "nodes" && el.data.label === value
+      );
   
+      // Cria um conjunto com os IDs dos nós filtrados
+      const filteredNodeIds = new Set(filteredNodes.map((node) => node.data.id));
+      setFilteredResearcherId(filteredNodes[0]?.data.id || null);
+      // Adiciona recursivamente os nós conectados
+      const addConnectedNodes = (nodeId: string) => {
+        graphData.forEach((el) => {
+          if (el.group === "edges" && (el.data.source === nodeId || el.data.target === nodeId)) {
+            const connectedNodeId = el.data.source === nodeId ? el.data.target : el.data.source;
+            if (!filteredNodeIds.has(connectedNodeId)) {
+              filteredNodeIds.add(connectedNodeId);
+              addConnectedNodes(connectedNodeId); // Recursivamente adiciona nós conectados
+            }
+          }
+        });
+      };
+  
+      // Inicia a busca recursiva para cada nó filtrado
+      filteredNodes.forEach((node) => addConnectedNodes(node.data.id));
+  
+      // Filtra os nós finais com base nos IDs coletados
+      const finalFilteredNodes = graphData.filter(
+        (el) => el.group === "nodes" && filteredNodeIds.has(el.data.id)
+      );
+  
+      // Filtra as arestas que conectam os nós finais
+      const filteredEdges = graphData.filter(
+        (el) =>
+          el.group === "edges" &&
+          filteredNodeIds.has(el.data.source) &&
+          filteredNodeIds.has(el.data.target)
+      );
+      
+  
+      // Atualiza os elementos do grafo com os nós e arestas filtrados
+      setCytoscapeElements([...finalFilteredNodes, ...filteredEdges]);
+
+    }
+  }
+
+    
     setShouldReapplyLayout(true);
+    console.log("Valor do firstfilter:", firstFilter);
   };
   
   const stylesheet = [
@@ -255,9 +343,9 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
       style: {
         "background-color": "#6495ED",
         label: "data(primeiroNome)", // Exibe apenas o primeiro nome
-        width: "mapData(relevancia, 0, 50, 20, 40)", // Mapeia largura com base em relevancia
-        height: "mapData(relevancia, 0, 50, 20, 40)", // Mapeia altura com base em relevancia
-        "font-size": 12,
+        width:  80,// Mapeia largura com base em relevancia
+        height: 80, // Mapeia altura com base em relevancia
+        "font-size": 18,
         "text-valign": "bottom",
         "text-halign": "center",
         "text-outline-color": "#ffffff",
@@ -268,13 +356,13 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
     },
     
     
-    {
-      selector: "node[!relevancia]", // Nós sem relevancia
-      style: {
-        width: 20, // Valor padrão
-        height: 20, // Valor padrão
-      },
-    },
+    // {
+    //   selector: "node[!relevancia]", // Nós sem relevancia
+    //   style: {
+    //     width: 20, // Valor padrão
+    //     height: 20, // Valor padrão
+    //   },
+    // },
     {
       selector: "node[indicador_semente = 'true']", // Nós marcados como sementes
       style: {
@@ -408,7 +496,7 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
           elements={cytoscapeElements}
           stylesheet={stylesheet}
           style={{ width: "100%", height: "100%" }}
-          minZoom={0.1}
+          minZoom={0.01}
           maxZoom={3}
           wheelSensitivity={0.2}
           cy={(cy) => {
@@ -433,6 +521,7 @@ const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | nu
               
           
               layout.run();
+              //cy.zoom(cy.zoom() * 0.3); 
               setIsLayoutApplied(true); // Marca o layout como aplicado
             }
 
