@@ -6,13 +6,13 @@ export default function Equipe() {
     {
       nome: "Alisson Alexandre Botelho Barros",
       papel: "Pesquisador Principal",
-      descricao: "Responsável por XPTO",
+      descricao: "Responsável pela mineração dos dados, desambiguação do nome das instituições, implementação do backend, implementação do banco de dados e implementação do metagrafo.",
       foto: "/alisson.png?height=100&width=100",
     },
     {
       nome: "Thauan de Moraes Viana",
       papel: "Pesquisador Principal",
-      descricao: "Responsável por XPTO2",
+      descricao: "Responsável pela mineração dos dados, implementação do grafo de pesquisadores, implementação do metagrafo e manutenção do banco de dados.",
       foto: "/thauan.png?height=100&width=100",
     },
     {
