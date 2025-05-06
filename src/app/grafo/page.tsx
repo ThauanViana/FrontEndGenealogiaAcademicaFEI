@@ -56,7 +56,7 @@ const [shouldHandleInstitutionFilter, setShouldHandleInstitutionFilter] = useSta
         throw new Error(data.error);
       }
   
-      // Adiciona a propriedade "primeiroNome" aos nós
+      // Adiciona a propriedade "primeiroNome" aos nósss
       const elementsWithFirstName = data.elements.map((el) => {
         if (el.group === "nodes" && el.data.label) {
           const firstName = el.data.label.split(" ")[0]; // Extrai apenas o primeiro nome
