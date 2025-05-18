@@ -152,6 +152,24 @@ const [shouldHandleInstitutionFilter, setShouldHandleInstitutionFilter] = useSta
       setShouldReapplyLayout(false);
     }
   }, [cytoscapeElements, shouldReapplyLayout]);
+
+
+  const resetFilter = (value: string) => {
+
+    setInstitutionFilter("Todas");
+    setLabelFilter("Todos");
+    setInstitutions(originalInstitutions);
+    setLabels(originalLabels);
+    setSelectedInstitution(null);
+    setSelectedResearcher(null);
+    setFilteredInstitutionId(null);
+    setFilteredResearcherId(null);
+    setCytoscapeElements(graphData);
+    setFirstFilter(null); 
+    setShouldReapplyLayout(true);
+  }
+
+
   const handleInstitutionFilterChange = (value: string) => {
     setInstitutionFilter(value);
   
@@ -160,24 +178,26 @@ const [shouldHandleInstitutionFilter, setShouldHandleInstitutionFilter] = useSta
       setSelectedInstitution(null);
       //setSelectedResearcher(null);
       setFilteredInstitutionId(null);
-      setCytoscapeElements(graphData);
+      //setCytoscapeElements(graphData);
       
 
       if (firstFilter === "institution" && selectedResearcher === null) {
         setLabels(originalLabels); // Mostra todos os pesquisadores
-      setInstitutions(originalInstitutions); // Mostra todas as instituições
+        setInstitutions(originalInstitutions); // Mostra todas as instituições
         setFirstFilter(null); // Reseta o primeiro filtro
-      }else if (firstFilter === "institution" && selectedResearcher !== null) {
+        setCytoscapeElements(graphData);
+      }else if (selectedResearcher !== null) {
         setFirstFilter("researcher"); // Mantém o filtro de pesquisador
-        handleLabelFilterChange(selectedResearcher); // Aplica o filtro de pesquisador novamente
+        setLabels(originalLabels);
+        //handleLabelFilterChange(selectedResearcher); // Aplica o filtro de pesquisador novamente
       }
     } else {
-      if (firstFilter === null) {
+      if (firstFilter === null || firstFilter === "institution") {
         // Caso seja o primeiro filtro aplicado
         setFirstFilter("institution");
         setSelectedInstitution(value);
         setFilteredInstitutionId(value);
-  
+        setLabelFilter("Todos");
         // Filtra os nós que pertencem à instituição selecionada
         const filteredNodes = graphData.filter(
           (el) =>
@@ -284,14 +304,16 @@ const [shouldHandleInstitutionFilter, setShouldHandleInstitutionFilter] = useSta
       }else if (selectedInstitution !== null) {
         
         setFirstFilter("institution"); // Mantém o filtro de pesquisador
-        console.log("valor do firstfilter:", firstFilter) 
+        setInstitutions(originalInstitutions);
+        //handleInstitutionFilterChange(selectedInstitution); // Aplica o filtro de instituição novamente
+        //console.log("valor do firstfilter:", firstFilter) 
         
-        console.log("RODOU AQUI!!")
+        //console.log("RODOU AQUI!!")
       }
     } else {
       setSelectedResearcher(value);
       //handleInstitutionFilterChange(institutionFilter); // Aplica o filtro de instituição novamente
-      if(firstFilter === null) {
+      if(firstFilter === null  || firstFilter === "researcher"){
         setFirstFilter("researcher");
       
       // Filtra os nós que possuem o label selecionado
@@ -339,6 +361,8 @@ const [shouldHandleInstitutionFilter, setShouldHandleInstitutionFilter] = useSta
   
       // Atualiza os elementos do grafo com os nós e arestas filtrados
       setCytoscapeElements([...finalFilteredNodes, ...filteredEdges]);
+
+      console.log("RESEARCHER FIRST!!")
     }else{
       // Filtra os nós que possuem o label selecionado
       const filteredNodes = graphData.filter(
@@ -497,52 +521,51 @@ const [shouldHandleInstitutionFilter, setShouldHandleInstitutionFilter] = useSta
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Grafo de Genealogia Acadêmica</h1>
   
-      <div className="flex flex-wrap gap-4">
-        {/* Filtro por Instituição */}
-        <Select value={institutionFilter} onValueChange={handleInstitutionFilterChange}>
-          <SelectTrigger className="w-[280px]">
-            <SelectValue placeholder="Instituição" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Todas">Todas as Instituições</SelectItem>
-            {[...new Set(institutions)]
-              .sort((a, b) => a.localeCompare(b))
-              .map((inst) => (
-                <SelectItem key={inst} value={inst}>
-                  {inst}
-                </SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
-  
-        {/* Filtro por Label */}
-        <Select value={labelFilter} onValueChange={handleLabelFilterChange}>
-          <SelectTrigger className="w-[280px]">
-            <SelectValue placeholder="Label" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="Todos">Todos os Pesquisadores</SelectItem>
-            {[...new Set(labels)]
-              .sort((a, b) => a.localeCompare(b))
-              .map((label) => (
-                <SelectItem key={label} value={label}>
-                  {label}
-                </SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
-  
-        {/* Botão para recarregar o grafo */}
-        <button
-          onClick={() => {
-            setSelectedPesquisador(null);
-            fetchGraphData();
-          }}
-          className="bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600 ml-auto self-start"
-        >
-          Recarregar grafo
-        </button>
-      </div>
+      <div className="flex flex-wrap gap-4 items-center">
+  {/* Filtro por Instituição */}
+  <Select value={institutionFilter} onValueChange={handleInstitutionFilterChange}>
+    <SelectTrigger className="w-[280px]">
+      <SelectValue placeholder="Instituição" />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="Todas">Todas as Instituições</SelectItem>
+      {[...new Set(institutions)]
+        .sort((a, b) => a.localeCompare(b))
+        .map((inst) => (
+          <SelectItem key={inst} value={inst}>
+            {inst}
+          </SelectItem>
+        ))}
+    </SelectContent>
+  </Select>
+
+  {/* Filtro por Label */}
+  <Select value={labelFilter} onValueChange={handleLabelFilterChange}>
+    <SelectTrigger className="w-[280px]">
+      <SelectValue placeholder="Label" />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="Todos">Todos os Pesquisadores</SelectItem>
+      {[...new Set(labels)]
+        .sort((a, b) => a.localeCompare(b))
+        .map((label) => (
+          <SelectItem key={label} value={label}>
+            {label}
+          </SelectItem>
+        ))}
+    </SelectContent>
+  </Select>
+
+  {/* Botão para resetar os filtros */}
+  <button
+  onClick={() => {
+    resetFilter("Todas");
+  }}
+  className="bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600 focus:outline-none"
+>
+  Resetar Filtros
+</button>
+</div>
   
       {/* Área principal: grafo + detalhes */}
       <div
