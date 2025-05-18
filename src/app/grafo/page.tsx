@@ -56,14 +56,18 @@ const [shouldHandleInstitutionFilter, setShouldHandleInstitutionFilter] = useSta
         throw new Error(data.error);
       }
   
-      // Adiciona a propriedade "primeiroNome" aos nós
       const elementsWithFirstName = data.elements.map((el) => {
         if (el.group === "nodes" && el.data.label) {
-            const lastName = el.data.label.split(" ").slice(-1)[0];          return {
+          const names = el.data.label.trim().split(/\s+/); // divide por espaços múltiplos também
+          const firstName = names[0];
+          const lastName = names[names.length - 1];
+          const fullNameConcat = `${firstName} ${lastName}`;
+          
+          return {
             ...el,
             data: {
               ...el.data,
-              primeiroNome: lastName, // Adiciona a propriedade primeiroNome
+              primeiroNome: fullNameConcat, // Agora é a concatenação do primeiro e último nome
             },
           };
         }
