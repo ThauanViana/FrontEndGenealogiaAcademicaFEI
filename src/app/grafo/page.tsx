@@ -37,6 +37,9 @@ const [selectedInstitution, setSelectedInstitution] = useState<string | null>(nu
 const [selectedResearcher, setSelectedResearcher] = useState<string | null>(null);
 const [firstFilter, setFirstFilter] = useState<"institution" | "researcher" | null>(null);
 const [shouldHandleInstitutionFilter, setShouldHandleInstitutionFilter] = useState(false);
+const [currentZoom, setCurrentZoom] = useState(1); // Zoom padrão
+const [currentPan, setCurrentPan] = useState({ x: 0, y: 0 }); // Posição padrão
+const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const fetchGraphData = useCallback(async (pesquisadorId?: string) => {
     try {
       setLoading(true);
@@ -112,7 +115,7 @@ const [shouldHandleInstitutionFilter, setShouldHandleInstitutionFilter] = useSta
       }
     });
   };
-
+ 
   useEffect(() => {
     if (cyRef.current && shouldReapplyLayout) {
       const cy = cyRef.current;
@@ -579,11 +582,26 @@ const [shouldHandleInstitutionFilter, setShouldHandleInstitutionFilter] = useSta
         >
           <button
             onClick={() => {
+
+              
+
               toggleFullscreen();
               if (cyRef.current) {
+                const cy = cyRef.current;
+                setCurrentZoom(cy.zoom()); 
+      setCurrentPan(cy.pan()); 
+      setViewportSize({ width: cy.width(), height: cy.height() });
                 setTimeout(() => {
-                  cyRef.current.resize();
-                  cyRef.current.fit();
+                  cy.resize();
+                  const newWidth = cy.width();
+        const newHeight = cy.height();
+        const panAdjustment = {
+          x: (currentPan.x / viewportSize.width) * newWidth,
+          y: (currentPan.y / viewportSize.height) * newHeight,
+        };
+                  cy.fit();
+                  cy.zoom(currentZoom); // Aplica o zoom capturado
+        cy.pan(panAdjustment); // Aplica a posição capturada
                 }, 0);
               }
             }}
@@ -622,7 +640,14 @@ const [shouldHandleInstitutionFilter, setShouldHandleInstitutionFilter] = useSta
                 cy.fit();
                 setIsLayoutApplied(true);
               }
-  
+                // Adiciona event listeners para capturar zoom e pan
+    // cy.on("zoom", () => {
+    //   setCurrentZoom(cy.zoom()); // Atualiza o estado do zoom
+    // });
+
+    // cy.on("pan", () => {
+    //   setCurrentPan(cy.pan()); // Atualiza o estado do pan
+    // });
               cy.on("tap", "node", (evt) => {
                 const node = evt.target;
   
