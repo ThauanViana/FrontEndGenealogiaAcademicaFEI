@@ -522,57 +522,56 @@ const [shouldHandleInstitutionFilter, setShouldHandleInstitutionFilter] = useSta
       <h1 className="text-3xl font-bold">Grafo de Genealogia Acadêmica</h1>
   
       <div className="flex flex-wrap gap-4 items-center">
-  {/* Filtro por Instituição */}
-  <Select value={institutionFilter} onValueChange={handleInstitutionFilterChange}>
-    <SelectTrigger className="w-[280px]">
-      <SelectValue placeholder="Instituição" />
-    </SelectTrigger>
-    <SelectContent>
-      <SelectItem value="Todas">Todas as Instituições</SelectItem>
-      {[...new Set(institutions)]
-        .sort((a, b) => a.localeCompare(b))
-        .map((inst) => (
-          <SelectItem key={inst} value={inst}>
-            {inst}
-          </SelectItem>
-        ))}
-    </SelectContent>
-  </Select>
-
-  {/* Filtro por Label */}
-  <Select value={labelFilter} onValueChange={handleLabelFilterChange}>
-    <SelectTrigger className="w-[280px]">
-      <SelectValue placeholder="Label" />
-    </SelectTrigger>
-    <SelectContent>
-      <SelectItem value="Todos">Todos os Pesquisadores</SelectItem>
-      {[...new Set(labels)]
-        .sort((a, b) => a.localeCompare(b))
-        .map((label) => (
-          <SelectItem key={label} value={label}>
-            {label}
-          </SelectItem>
-        ))}
-    </SelectContent>
-  </Select>
-
-  {/* Botão para resetar os filtros */}
-  <button
-  onClick={() => {
-    resetFilter("Todas");
-  }}
-  className="bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600 focus:outline-none"
->
-  Resetar Filtros
-</button>
-</div>
+        {/* Filtro por Instituição */}
+        <Select value={institutionFilter} onValueChange={handleInstitutionFilterChange}>
+          <SelectTrigger className="w-[280px]">
+            <SelectValue placeholder="Instituição" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Todas">Todas as Instituições</SelectItem>
+            {[...new Set(institutions)]
+              .sort((a, b) => a.localeCompare(b))
+              .map((inst) => (
+                <SelectItem key={inst} value={inst}>
+                  {inst}
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
+  
+        {/* Filtro por Label */}
+        <Select value={labelFilter} onValueChange={handleLabelFilterChange}>
+          <SelectTrigger className="w-[280px]">
+            <SelectValue placeholder="Label" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Todos">Todos os Pesquisadores</SelectItem>
+            {[...new Set(labels)]
+              .sort((a, b) => a.localeCompare(b))
+              .map((label) => (
+                <SelectItem key={label} value={label}>
+                  {label}
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
+  
+        {/* Botão para resetar os filtros */}
+        <button
+          onClick={() => {
+            resetFilter("Todas");
+          }}
+          className="bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600 focus:outline-none"
+        >
+          Resetar Filtros
+        </button>
+      </div>
   
       {/* Área principal: grafo + detalhes */}
       <div
-  className={`flex ${isFullscreen ? "fixed inset-0 z-50 bg-white p-4" : ""}`}
-  style={isFullscreen ? { height: "100vh" } : { height: "auto"}}
->
-
+        className={`flex ${isFullscreen ? "fixed inset-0 z-50 bg-white p-4" : ""}`}
+        style={isFullscreen ? { height: "100vh" } : { height: "auto" }}
+      >
         {/* Área do grafo */}
         <div
           className="flex-1 border border-gray-300 rounded-lg relative"
@@ -627,12 +626,10 @@ const [shouldHandleInstitutionFilter, setShouldHandleInstitutionFilter] = useSta
               cy.on("tap", "node", (evt) => {
                 const node = evt.target;
   
-                
                 cy.elements("node").removeClass("selected");
   
                 node.addClass("selected");
   
-                
                 setSelectedNode(node.data());
               });
             }}
@@ -689,9 +686,40 @@ const [shouldHandleInstitutionFilter, setShouldHandleInstitutionFilter] = useSta
               </CardContent>
             </Card>
           )}
+  
+          {/* Legenda para as cores dos nós */}
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle>Legenda</CardTitle>
+              <CardDescription>Significado das cores dos nós</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2">
+                <li className="flex items-center space-x-2">
+                  <span className="w-4 h-4 rounded-full bg-[#6495ED] inline-block"></span>
+                  <span>Pesquisador padrão</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <span className="w-4 h-4 rounded-full bg-[#FFD700] inline-block"></span>
+                  <span>Pesquisador semente</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <span className="w-4 h-4 rounded-full bg-[#FFA500] inline-block"></span>
+                  <span>Pesquisador filtrado</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <span className="w-4 h-4 rounded-full bg-[#eb3434] inline-block"></span>
+                  <span>Instituição filtrada</span>
+                </li>
+                <li className="flex items-center space-x-2">
+                  <span className="w-4 h-4 rounded-full bg-[#800080] inline-block"></span>
+                  <span>Pesquisador selecionado</span>
+                </li>
+              </ul>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
   )
-  
 }

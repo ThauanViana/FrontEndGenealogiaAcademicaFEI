@@ -206,15 +206,15 @@ import { Tooltip } from "@/components/ui/tooltip";
        selector: `node[id = '${institutionFilter}']`,
        style: {
          "background-color": "#FFD700", 
-         "border-width": 3,
-         "border-color": "#FFA500",
+        
+         
        },
      },
      {
       selector: `node[id = '${selectedInstitution?.id}']`,
       style: {
-        "border-width": 3,
-         "border-color": "#FFA500",
+        
+         
          "background-color": "#9403fc",
       },
     },
@@ -464,6 +464,31 @@ import { Tooltip } from "@/components/ui/tooltip";
                 </CardContent>
               </Card>
             )}
+            {/* Legenda para as cores dos nós */}
+<Card className="mt-4">
+  <CardHeader>
+    <CardTitle>Legenda</CardTitle>
+    <CardDescription>Significado das cores dos nós</CardDescription>
+  </CardHeader>
+  <CardContent>
+    <ul className="space-y-2">
+      <li className="flex items-center space-x-2">
+        <span className="w-4 h-4 rounded-full bg-[#6495ED] inline-block"></span>
+        <span>Instituição padrão</span>
+      </li>
+      <li className="flex items-center space-x-2">
+        <span className="w-4 h-4 rounded-full bg-[#FFD700] inline-block"></span>
+        <span>Instituição filtrada</span>
+      </li>
+      <li className="flex items-center space-x-2">
+        <span className="w-4 h-4 rounded-full bg-[#9403fc] inline-block"></span>
+        <span>Instituição selecionada</span>
+      </li>
+      
+      
+    </ul>
+  </CardContent>
+</Card>
           </div>
         )}
       </div>
@@ -593,6 +618,7 @@ import { Tooltip } from "@/components/ui/tooltip";
                   </div>
                 </CardContent>
               </Card>
+              
             ) : (
               <Card>
                 <CardHeader>
@@ -613,6 +639,31 @@ import { Tooltip } from "@/components/ui/tooltip";
                 </CardContent>
               </Card>
             )}
+            {/* Legenda para as cores dos nós */}
+<Card className="mt-4">
+  <CardHeader>
+    <CardTitle>Legenda</CardTitle>
+    <CardDescription>Significado das cores dos nós</CardDescription>
+  </CardHeader>
+  <CardContent>
+    <ul className="space-y-2">
+      <li className="flex items-center space-x-2">
+        <span className="w-4 h-4 rounded-full bg-[#6495ED] inline-block"></span>
+        <span>Instituição padrão</span>
+      </li>
+      <li className="flex items-center space-x-2">
+        <span className="w-4 h-4 rounded-full bg-[#FFD700] inline-block"></span>
+        <span>Instituição filtrada</span>
+      </li>
+      <li className="flex items-center space-x-2">
+        <span className="w-4 h-4 rounded-full bg-[#9403fc] inline-block"></span>
+        <span>Instituição selecionada</span>
+      </li>
+      
+      
+    </ul>
+  </CardContent>
+</Card>
           </div>
         </div>
       )}
