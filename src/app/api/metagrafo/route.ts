@@ -87,7 +87,7 @@ export async function GET() {
       data: {
         id: name,
         label: name,
-        size: data.count,
+        size: data.incoming,
         outgoing: data.outgoing,
         incoming: data.incoming,
         conexao_instituicao: conexao_instituicao.get(name) || {}, // Inclui o dicionário de conexões de saída
